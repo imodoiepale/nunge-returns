@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { X, BookmarkPlus, Share2 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
+// Interfaces remain the same
 interface JobDetail {
   label: string
   value: string
@@ -37,6 +37,15 @@ interface JobPosition {
   preferredQualifications: string[]
   additionalRequirements: string[]
   compensation: string
+}
+
+interface ApplicationForm {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  linkedIn: string
+  coverLetter: string
 }
 
 const jobPositions: JobPosition[] = [
@@ -177,6 +186,7 @@ const jobPositions: JobPosition[] = [
 
 export default function CareersPage() {
   const [selectedPosition, setSelectedPosition] = useState<JobPosition | null>(null)
+  const [showApplicationDialog, setShowApplicationDialog] = useState(false)
   const [filter, setFilter] = useState({
     department: "",
     type: "",
@@ -195,31 +205,20 @@ export default function CareersPage() {
     )
   })
 
-  const renderJobDetails = (details: JobDetail[]) => (
-    <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-      {details.map((detail, index) => (
-        <div key={index} className="flex flex-col">
-          <span className="text-muted-foreground">{detail.label}</span>
-          <span>{detail.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-
   return (
-    <div className="flex min-h-[calc(100vh-4rem)]">
-      <div className="flex-1 overflow-auto p-8">
-        <div className="mx-auto max-w-6xl space-y-8">
-          <div className="space-y-4">
-            <h1 className="text-3xl font-semibold tracking-tight">Careers at Nunge Returns</h1>
-            <p className="text-lg text-muted-foreground">
+    <div className="h-screen flex overflow-hidden">
+      <ScrollArea className="flex-1 border-r">
+        <div className="p-6 space-y-6 max-w-5xl mx-auto">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Careers at Nunge Returns</h1>
+            <p className="text-sm text-muted-foreground">
               Join our team and help revolutionize tax compliance in Kenya.
             </p>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <Select onValueChange={(value) => setFilter({ ...filter, department: value === "all" ? "" : value })}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[180px] text-sm">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
               <SelectContent>
@@ -230,7 +229,7 @@ export default function CareersPage() {
             </Select>
 
             <Select onValueChange={(value) => setFilter({ ...filter, type: value === "all" ? "" : value })}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[180px] text-sm">
                 <SelectValue placeholder="Job Type" />
               </SelectTrigger>
               <SelectContent>
@@ -241,7 +240,7 @@ export default function CareersPage() {
             </Select>
 
             <Select onValueChange={(value) => setFilter({ ...filter, location: value === "all" ? "" : value })}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[180px] text-sm">
                 <SelectValue placeholder="Location" />
               </SelectTrigger>
               <SelectContent>
@@ -251,24 +250,23 @@ export default function CareersPage() {
             </Select>
           </div>
 
-          <div className="grid gap-4">
+          <div className="grid gap-3">
             {filteredPositions.map((position) => (
-              <Card 
-                key={position.id} 
-                className={`cursor-pointer transition-colors ${
-                  selectedPosition?.id === position.id ? 'border-primary' : 'hover:bg-accent'
-                }`}
+              <Card
+                key={position.id}
+                className={`cursor-pointer transition-colors ${selectedPosition?.id === position.id ? 'border-primary' : 'hover:bg-accent/50'
+                  }`}
                 onClick={() => handleOpen(position)}
               >
-                <CardHeader>
+                <CardHeader className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-lg font-semibold">{position.title}</CardTitle>
-                      <CardDescription className="text-sm">{position.location}</CardDescription>
+                      <CardTitle className="text-base font-medium">{position.title}</CardTitle>
+                      <CardDescription className="text-xs mt-0.5">{position.location}</CardDescription>
                     </div>
                     <div className="flex gap-2">
-                      <Badge variant="secondary" className="text-xs">{position.type}</Badge>
-                      <Badge variant="outline" className="text-xs">{position.department}</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{position.type}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{position.department}</Badge>
                     </div>
                   </div>
                 </CardHeader>
@@ -276,31 +274,37 @@ export default function CareersPage() {
             ))}
           </div>
         </div>
-      </div>
-
+      </ScrollArea>
       {selectedPosition && (
-        <div className="w-[1080px] border-l mt-12">
-          <div className="sticky top-[3rem] z-10 border-b bg-background p-6">
+        <div className="w-[800px] flex flex-col">
+          <div className="sticky top-0 z-10 border-b bg-gradient-to-b from-background/80 to-background backdrop-blur-sm p-4">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
-                <h2 className="text-2xl font-semibold">{selectedPosition.title}</h2>
-                <p className="text-base text-muted-foreground">{selectedPosition.location}</p>
+                <h2 className="text-lg font-medium">{selectedPosition.title}</h2>
+                <p className="text-xs text-muted-foreground">{selectedPosition.location}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon">
-                  <BookmarkPlus className="h-5 w-5" />
+              <div className=" flex space-x-2 absolute top-0 right-0 p-4">
+                <Button size="sm" onClick={() => setShowApplicationDialog(true)}>
+                  Apply Now
                 </Button>
-                <Button variant="ghost" size="icon">
-                  <Share2 className="h-5 w-5" />
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm">
+                  <BookmarkPlus className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => setSelectedPosition(null)}>
-                  <X className="h-5 w-5" />
+                <Button variant="ghost" size="sm">
+                  <Share2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedPosition(null)}>
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             </div>
+              
+            </div>
 
-            <div className="mt-6">
-              {renderJobDetails([
+
+            <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+              {[
                 { label: "Date posted", value: selectedPosition.datePosted },
                 { label: "Job number", value: selectedPosition.jobNumber },
                 { label: "Work site", value: selectedPosition.worksite },
@@ -308,70 +312,147 @@ export default function CareersPage() {
                 { label: "Role type", value: selectedPosition.roleType },
                 { label: "Profession", value: selectedPosition.profession },
                 { label: "Discipline", value: selectedPosition.discipline },
-                { label: "Employment type", value: selectedPosition.employmentType }
-              ])}
+                { label: "Employment type", value: selectedPosition.employmentType },
+              ].map((detail, index) => (
+                <div key={index} className="flex flex-col">
+                  <span className="text-muted-foreground">{detail.label}</span>
+                  <span>{detail.value}</span>
+                </div>
+              ))}
             </div>
           </div>
-          
-          <div className="h-[calc(150vh-20rem)] overflow-y-auto p-6 space-y-8">
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold">Overview</h3>
-              {selectedPosition.overview.map((paragraph, i) => (
-                <p key={i} className="text-sm text-muted-foreground leading-relaxed">{paragraph}</p>
+
+          <ScrollArea className="flex-1">
+            <div className="space-y-6 p-4 pb-24">
+              {[
+                {
+                  title: "Overview", content: selectedPosition.overview.map((p, i) =>
+                    <p key={i} className="text-xs text-muted-foreground leading-relaxed">{p}</p>
+                  )
+                },
+                {
+                  title: "Responsibilities", content:
+                    <ul className="list-disc pl-4 space-y-1.5">
+                      {selectedPosition.responsibilities.map((r, i) =>
+                        <li key={i} className="text-xs text-muted-foreground">{r}</li>
+                      )}
+                    </ul>
+                },
+                {
+                  title: "Required Qualifications", content:
+                    <ul className="list-disc pl-4 space-y-1.5">
+                      {selectedPosition.requiredQualifications.map((q, i) =>
+                        <li key={i} className="text-xs text-muted-foreground">{q}</li>
+                      )}
+                    </ul>
+                },
+                {
+                  title: "Preferred Qualifications", content:
+                    <ul className="list-disc pl-4 space-y-1.5">
+                      {selectedPosition.preferredQualifications.map((q, i) =>
+                        <li key={i} className="text-xs text-muted-foreground">{q}</li>
+                      )}
+                    </ul>
+                },
+                {
+                  title: "Additional Requirements", content:
+                    <ul className="list-disc pl-4 space-y-1.5">
+                      {selectedPosition.additionalRequirements.map((r, i) =>
+                        <li key={i} className="text-xs text-muted-foreground">{r}</li>
+                      )}
+                    </ul>
+                },
+                {
+                  title: "Compensation", content:
+                    <p className="text-xs text-muted-foreground">{selectedPosition.compensation}</p>
+                }
+              ].map((section, index) => (
+                <section key={index} className="space-y-2">
+                  <h3 className="text-sm font-medium">{section.title}</h3>
+                  {section.content}
+                </section>
               ))}
-            </section>
+            </div>
+          </ScrollArea>
+        </div>
+      )}
 
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold">Responsibilities</h3>
-              <ul className="list-disc pl-6 space-y-2">
-                {selectedPosition.responsibilities.map((resp, i) => (
-                  <li key={i} className="text-sm text-muted-foreground">{resp}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold">Required Qualifications</h3>
-              <ul className="list-disc pl-6 space-y-2">
-                {selectedPosition.requiredQualifications.map((qual, i) => (
-                  <li key={i} className="text-sm text-muted-foreground">{qual}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold">Preferred Qualifications</h3>
-              <ul className="list-disc pl-6 space-y-2">
-                {selectedPosition.preferredQualifications.map((qual, i) => (
-                  <li key={i} className="text-sm text-muted-foreground">{qual}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold">Additional Requirements</h3>
-              <ul className="list-disc pl-6 space-y-2">
-                {selectedPosition.additionalRequirements.map((req, i) => (
-                  <li key={i} className="text-sm text-muted-foreground">{req}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-xl font-semibold">Compensation</h3>
-              <p className="text-sm text-muted-foreground">{selectedPosition.compensation}</p>
-            </section>
-
-            <section className="pt-4">
-              <div className="sticky bottom-0 bg-background p-4">
-                <Button className="w-full" size="lg">
-                  Apply
+      {showApplicationDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-[500px] h-[85vh] flex flex-col">
+            <CardHeader className="sticky top-0 z-20 bg-gradient-to-b from-background/80 to-background backdrop-blur-sm border-b p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Apply for Position</CardTitle>
+                  <CardDescription className="text-xs mt-0.5">{selectedPosition?.title}</CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowApplicationDialog(false)}
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-            </section>
-          </div>
+            </CardHeader>
+
+            <ScrollArea className="flex-1">
+              <CardContent className="space-y-4 p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: "firstName", label: "First Name", type: "text", placeholder: "Enter first name" },
+                    { id: "lastName", label: "Last Name", type: "text", placeholder: "Enter last name" },
+                  ].map((field) => (
+                    <div key={field.id} className="space-y-1.5">
+                      <Label htmlFor={field.id} className="text-xs">{field.label}</Label>
+                      <Input id={field.id} type={field.type} placeholder={field.placeholder} className="text-xs" />
+                    </div>
+                  ))}
+                </div>
+
+                {[
+                  { id: "email", label: "Email", type: "email", placeholder: "Enter email address" },
+                  { id: "phone", label: "Phone Number", type: "tel", placeholder: "Enter phone number" },
+                  { id: "linkedin", label: "LinkedIn Profile", type: "url", placeholder: "Enter LinkedIn URL" },
+                ].map((field) => (
+                  <div key={field.id} className="space-y-1.5">
+                    <Label htmlFor={field.id} className="text-xs">{field.label}</Label>
+                    <Input id={field.id} type={field.type} placeholder={field.placeholder} className="text-xs" />
+                  </div>
+                ))}
+
+                {[
+                  { id: "cv", label: "CV/Resume" },
+                  { id: "coverLetter", label: "Cover Letter" },
+                ].map((field) => (
+                  <div key={field.id} className="space-y-1.5">
+                    <Label htmlFor={field.id} className="text-xs">{field.label}</Label>
+                    <div className="grid gap-1.5">
+                      <Input id={field.id} type="file" accept=".pdf,.doc,.docx" className="text-xs" />
+                      <p className="text-[10px] text-muted-foreground">
+                        Accepted formats: PDF, DOC, DOCX (Max size: 5MB)
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </ScrollArea>
+
+            <div className="sticky bottom-0 p-4 bg-gradient-to-t from-background via-background/95 to-transparent border-t">
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowApplicationDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button size="sm">Submit Application</Button>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>
   )
-  }
+}
