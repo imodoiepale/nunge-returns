@@ -6,7 +6,8 @@ export async function POST(req: Request) {
     const { pin } = await req.json();
     const browser = await chromium.launch({ 
         headless: true,
-        channel: 'msedge',
+        // Use chromium by default which Playwright can download automatically
+        // channel: 'msedge',
     //   executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
     });
     const context = await browser.newContext();
@@ -16,7 +17,9 @@ export async function POST(req: Request) {
       await page.goto("https://itax.kra.go.ke/KRA-Portal/");
       await page.locator("#logid").click();
       await page.evaluate(() => {
-        manufacturerAuthorization();
+        // This function is defined in the KRA portal's page context
+        // @ts-expect-error - Function is available in KRA portal's page context
+        window.manufacturerAuthorization?.();
       });
       await page.locator("#mfrPinResi").fill(pin);
       await page.click("#nextBtn");
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : 'An unknown error occurred' },
       { status: 500 }
     );
   }

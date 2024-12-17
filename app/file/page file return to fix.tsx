@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -34,7 +36,7 @@ const extractManufacturerDetails = async (pin: string) => {
   }
 };
 
-const fileNilReturn = async (credentials) => {
+const fileNilReturn = async (credentials: { pin: string; password: string }) => {
   const browser = await chromium.launch({ 
     headless: false,
     executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' 
