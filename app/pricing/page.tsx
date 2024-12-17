@@ -24,12 +24,14 @@ export default function PricingPage() {
       features: [
         "Multiple nil return filing",
         "Priority email support",
-        "1-hour processing",
+        "Sign up required",
+        // "1-hour processing",
         "Digital receipt",
         "Secure data handling",
         "Filing history access",
         "Auto-fill from previous returns"
-      ]
+      ],
+      className: "bg-[rgba(189,157,221,0.1)]"
     },
     {
       name: "Enterprise",
@@ -37,6 +39,7 @@ export default function PricingPage() {
       price: "Contact Us",
       features: [
         "Unlimited nil return filing",
+        "Unlimited actual tax returns filing",
         "24/7 priority support",
         "Instant processing",
         "Digital receipt",
@@ -44,7 +47,8 @@ export default function PricingPage() {
         "Filing history access",
         "Auto-fill from previous returns",
         "Dedicated account manager",
-        "Custom API integration"
+        "Custom API integration",
+        "Company and individual tax returns"
       ]
     }
   ]
@@ -59,7 +63,7 @@ export default function PricingPage() {
       </div>
       <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-8 md:grid-cols-3">
         {plans.map((plan) => (
-          <Card key={plan.name} className="flex flex-col">
+          <Card key={plan.name} className={`flex flex-col ${plan.className}`}>
             <CardHeader>
               <CardTitle>{plan.name}</CardTitle>
               <CardDescription>{plan.description}</CardDescription>
