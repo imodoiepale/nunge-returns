@@ -53,7 +53,7 @@ export default function SecurityPage() {
   ]
 
   return (
-    <div className="container py-16">
+    <div className=" py-16">
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="text-4xl font-bold tracking-tight">Security First Approach</h1>
         <p className="mt-6 text-lg text-muted-foreground">
