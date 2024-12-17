@@ -2,7 +2,7 @@ import Image from 'next/image'
 
 export default function AboutPage() {
   return (
-    <div className="container py-24">
+    <div className=" py-24">
       <div className="mx-auto max-w-5xl space-y-12">
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">About Nunge Returns</h1>

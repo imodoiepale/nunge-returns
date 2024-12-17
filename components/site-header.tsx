@@ -5,7 +5,8 @@ import { ScheduleCallButton } from "@/components/schedule-call-button"
 
 const navItems = [
   { label: "About", href: "/about" },
-  { label: "Docs", href: "/docs" },
+  // { label: "Docs", href: "/docs" },
+  { label: "Pricing", href: "/pricing" },
   { label: "Blog", href: "/blog" },
   { label: "Careers", href: "/careers" },
 ]

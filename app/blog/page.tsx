@@ -1,20 +1,99 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { ArrowRight } from "lucide-react"
 
-const blogPosts = Array.from({ length: 10 }, (_, index) => ({
-  id: index + 1,
-  title: `Blog Post ${index + 1}`,
-  date: `2023-0${(index % 12) + 1}-15`,
-  excerpt: `This is the summary of Blog Post ${index + 1}. Learn key tips, insights, and guidance on tax filing...`,
-  content: `This is the full content of Blog Post ${index + 1}. Here, you will find detailed insights, guidance, and tips to help you navigate tax compliance in Kenya.`,
-  image: "/placeholder.svg?height=200&width=300"
-}))
+interface BlogPost {
+  id: number
+  title: string
+  date: string
+  excerpt: string
+  content: string
+  image: string
+}
+
+const originalImages = [
+  "https://images.pexels.com/photos/53621/calculator-calculation-insurance-finance-53621.jpeg",
+  "https://images.pexels.com/photos/95916/pexels-photo-95916.jpeg",
+  "https://images.pexels.com/photos/4386431/pexels-photo-4386431.jpeg",
+  "https://images.pexels.com/photos/6863250/pexels-photo-6863250.jpeg",
+  "https://images.pexels.com/photos/7681091/pexels-photo-7681091.jpeg",
+  "https://images.pexels.com/photos/4386339/pexels-photo-4386339.jpeg",
+  "https://images.pexels.com/photos/4475523/pexels-photo-4475523.jpeg",
+  "https://images.pexels.com/photos/7681097/pexels-photo-7681097.jpeg",
+  "https://images.pexels.com/photos/6863255/pexels-photo-6863255.jpeg",
+  "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg"
+]
+
+function createBlogPosts(images: string[]): BlogPost[] {
+  return Array.from({ length: 10 }, (_, index) => ({
+    id: index + 1,
+    title: `Blog Post ${index + 1}`,
+    date: `2023-0${(index % 12) + 1}-15`,
+    excerpt: `This is the summary of Blog Post ${index + 1}. Learn key tips, insights, and guidance on tax filing...`,
+    content: `This is the full content of Blog Post ${index + 1}. Here, you will find detailed insights, guidance, and tips to help you navigate tax compliance in Kenya.`,
+    image: images[index]
+  }))
+}
 
 export default function BlogPage() {
-  const [selectedPost, setSelectedPost] = useState(null)
+  const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null)
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function initializeBlogPosts() {
+      try {
+        const response = await fetch('/api/download-images', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            images: originalImages.map((url, index) => ({
+              url,
+              filename: `tax-image-${index + 1}.jpg`
+            }))
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to download images')
+        }
+
+        const { imagePaths } = await response.json()
+        setBlogPosts(createBlogPosts(imagePaths))
+      } catch (error) {
+        console.error('Error initializing blog posts:', error)
+        setBlogPosts(createBlogPosts(originalImages))
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    initializeBlogPosts()
+  }, [])
+
+  // Preload all images
+  useEffect(() => {
+    if (blogPosts.length > 0) {
+      blogPosts.forEach(post => {
+        const img = new Image()
+        img.src = post.image
+      })
+    }
+  }, [blogPosts])
+
+  if (isLoading) {
+    return (
+      <div className="container py-24">
+        <div className="mx-auto max-w-7xl space-y-8">
+          <h1 className="text-4xl font-bold tracking-tighter">Loading...</h1>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container py-24">
@@ -49,6 +128,8 @@ export default function BlogPage() {
                     src={post.image}
                     alt={post.title}
                     fill
+                    sizes={selectedPost ? "48px" : "(max-width: 768px) 100vw, 300px"}
+                    priority={index < 4 || post.id === selectedPost?.id}
                     className="object-cover rounded-md"
                   />
                 </div>
@@ -78,7 +159,10 @@ export default function BlogPage() {
                   src={selectedPost.image}
                   alt={selectedPost.title}
                   fill
+                  sizes="(max-width: 768px) 100vw, 800px"
+                  priority
                   className="object-cover rounded-md"
+                  loading="eager"
                 />
               </div>
               <p className="text-lg">{selectedPost.content}</p>
@@ -95,4 +179,3 @@ export default function BlogPage() {
     </div>
   )
 }
-
