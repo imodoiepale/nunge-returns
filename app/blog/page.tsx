@@ -75,15 +75,6 @@ export default function BlogPage() {
     initializeBlogPosts()
   }, [])
 
-  useEffect(() => {
-    if (blogPosts.length > 0) {
-      blogPosts.forEach(post => {
-        const img = new Image()
-        img.src = post.image
-      })
-    }
-  }, [blogPosts])
-
   if (isLoading) {
     return (
       <div className="container py-24">
