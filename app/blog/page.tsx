@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { ArrowRight } from "lucide-react"
+// import { ArrowRight } from "lucide-react"
 
 interface BlogPost {
   id: number
@@ -26,7 +26,7 @@ const originalImages = [
   "https://images.pexels.com/photos/4386466/pexels-photo-4386466.jpeg"
 ]
 
-function createBlogPosts(images: string[]): BlogPost[] {
+const createBlogPosts = (images: string[]): BlogPost[] => {
   return Array.from({ length: 10 }, (_, index) => ({
     id: index + 1,
     title: `Blog Post ${index + 1}`,
@@ -75,7 +75,6 @@ export default function BlogPage() {
     initializeBlogPosts()
   }, [])
 
-  // Preload all images
   useEffect(() => {
     if (blogPosts.length > 0) {
       blogPosts.forEach(post => {
