@@ -1,101 +1,122 @@
-import Image from "next/image";
+import Link from "next/link"
+import Image from "next/image"
+import { ArrowRight, FileText, Shield, Zap } from 'lucide-react'
+import { Button } from "@/components/ui/button"
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <>
+      <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 to-background pt-8">
+        <div className="absolute inset-0 bg-grid-white/10 bg-[size:40px_40px] [mask-image:radial-gradient(white,transparent_70%)]" />
+        <div className="container relative z-10 mx-auto flex flex-col items-center justify-center gap-4 py-20 text-center md:py-24">
+          <div className="absolute left-4 top-4 rounded-br-3xl bg-primary px-4 py-2 md:left-8 md:top-8">
+            <p className="text-sm font-medium text-primary-foreground">
+              Trusted by <span className="font-bold">6,345+</span> Kenyans
+            </p>
+            
+          </div>
+          <div className="absolute top-4 right-4 animate-bounce duration-5000 md:top-8 md:right-8">
+            <div className="relative h-[150px] w-[150px]">
+              <Image
+                src="/kra-logo.png"
+                alt="Kenya Revenue Authority (KRA) logo"
+                width={150}
+                height={150}
+                className="object-contain"
+              />
+            </div>
+          </div>
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl">
+              Effortless KRA Nil Returns
+              <br />
+              <span className="text-primary">In Just 30 Seconds</span>
+            </h1>
+            <p className="mx-auto max-w-[700px] text-lg text-muted-foreground sm:text-xl">
+              Nunge Returns simplifies tax compliance for students and unemployed youth. 
+              Fast, secure, and affordable - your path to hassle-free filing starts here.
+            </p>
+          </div>
+          <div className="flex flex-col gap-4 min-[400px]:flex-row">
+            <Button size="lg" className="rounded-full" asChild>
+              <Link href="/file">
+                Start Filing Now <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" className="rounded-full">
+              Explore Features
+            </Button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+      </section>
+
+      <section className=" space-y-8 py-4 px-6 md:px-0 mb-8">
+        <div className="mx-auto flex max-w-[48rem] flex-col items-center space-y-2 text-center">
+          <h2 className="text-2xl font-bold tracking-tighter sm:text-3xl md:text-4xl">
+            Everything You Need for Seamless Filing
+          </h2>
+          <p className="max-w-[500px] text-muted-foreground md:text-lg">
+            Our platform is designed with you in mind, offering a suite of features to make your tax filing experience smooth and worry-free.
+          </p>
+        </div>
+        <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-3">
+          <div className="relative overflow-hidden rounded-lg border bg-background p-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Zap className="h-4 w-4" />
+            </div>
+            <h3 className="mt-2 text-lg font-bold">Lightning-Fast Filing</h3>
+            <p className="mt-1 text-muted-foreground">Complete your nil returns in seconds with our automated, user-friendly system.</p>
+          </div>
+          <div className="relative overflow-hidden rounded-lg border bg-background p-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Shield className="h-4 w-4" />
+            </div>
+            <h3 className="mt-2 text-lg font-bold">Bank-Grade Security</h3>
+            <p className="mt-1 text-muted-foreground">Rest easy knowing your data is protected with state-of-the-art encryption and security measures.</p>
+          </div>
+          <div className="relative overflow-hidden rounded-lg border bg-background p-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <FileText className="h-4 w-4" />
+            </div>
+            <h3 className="mt-2 text-lg font-bold">Instant Documentation</h3>
+            <p className="mt-1 text-muted-foreground">Receive your filing receipts and confirmations immediately after submission.</p>
+          </div>
+        </div>
+        <div className="mx-auto flex flex-col items-center space-y-4 text-center">
+          <Button size="lg" className="rounded-full" asChild>
+            <Link href="/file">
+              Get Started Now <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </section>
+
+      {/* <section className="bg-primary/5 px-24 py-8">
+        <div className=" flex flex-col items-center justify-between gap-8 px-4 md:flex-row md:px-0">
+          <div className="max-w-md space-y-4 md:space-y-6">
+            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
+              Ready to Simplify Your Tax Returns?
+            </h2>
+            <p className="text-muted-foreground md:text-xl">
+              Join thousands of satisfied Kenyans who have made tax compliance a breeze with Nunge Returns.
+            </p>
+            <Button size="lg" className="rounded-full" asChild>
+              <Link href="/file">
+                Get Started Now <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+          <div className="relative h-[250px] w-[250px] md:h-[300px] md:w-[300px]">
+            <Image
+              src="/kra-logo.png"
+              alt="Kenya Revenue Authority (KRA) logo"
+              width={300}
+              height={300}
+              className="object-contain"
+            />
+          </div>
+        </div>
+      </section> */}
+    </>
+  )
 }
