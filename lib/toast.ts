@@ -3,7 +3,7 @@ import { useTheme } from 'next-themes';
 
 // Custom toast options based on affiliate theme
 const useCustomToast = () => {
-  const { theme } = useTheme();
+  useTheme();
 
   // Get theme colors based on domain
   const getThemeColors = () => {
@@ -50,7 +50,6 @@ const useCustomToast = () => {
 
   // Error toast
   const error = (message: string) => {
-    const colors = getThemeColors();
     toast.error(message, {
       ...baseToastOptions,
       style: {
@@ -105,7 +104,7 @@ const useCustomToast = () => {
   };
 
   // Custom toast with progress bar
-  const withProgress = (message: string, promise: Promise<any>) => {
+  const withProgress = <T>(message: string, promise: Promise<T>) => {
     const colors = getThemeColors();
     return toast.promise(promise, {
       loading: 'Loading...',

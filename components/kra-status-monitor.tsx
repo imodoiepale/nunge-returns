@@ -19,32 +19,30 @@ export function KraStatusMonitor() {
       const response = await fetch("/api/kra/status")
       const data = await response.json()
 
-      const newStatus: KraStatus = {
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to check KRA website status")
+      }
+
+      setStatus({
         status: data.status,
         responseTime: data.responseTime,
         lastChecked: new Date(),
-      }
+      })
 
-      setStatus(newStatus)
-
-      // Show toast only if status changes
-      if (status && status.status !== newStatus.status) {
-        switch (newStatus.status) {
-          case "down":
-            toast.error("KRA website is currently down")
-            break
-          case "degraded":
-            toast.warning("KRA website is experiencing issues")
-            break
-          case "up":
-            if (status.status !== "up") {
-              toast.success("KRA website is back online")
-            }
-            break
-        }
+      // Show toast based on status
+      if (data.status === "up") {
+        toast.success("KRA website is up and running")
+      } else if (data.status === "degraded") {
+        toast.warning("KRA website is experiencing some issues")
+      } else {
+        toast.error("KRA website is down")
       }
-    } catch (error) {
-      console.error("Failed to check KRA status:", error)
+    } catch (_error) {
+      setStatus({
+        status: "down",
+        responseTime: 0,
+        lastChecked: new Date(),
+      })
       toast.error("Failed to check KRA website status")
     }
   }
@@ -52,12 +50,12 @@ export function KraStatusMonitor() {
   useEffect(() => {
     // Initial check
     checkStatus()
-
-    // Check every 30 seconds
+    
+    // Set up interval for periodic checks
     const interval = setInterval(checkStatus, 30000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [checkStatus, toast])
 
   if (!status) {
     return null
@@ -77,7 +75,7 @@ export function KraStatusMonitor() {
             status.status === "up"
               ? "default"
               : status.status === "degraded"
-              ? "warning"
+              ? "secondary"
               : "destructive"
           }
         >
