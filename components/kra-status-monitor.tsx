@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import useCustomToast from "@/lib/toast"
@@ -13,7 +13,7 @@ export function KraStatusMonitor() {
   const toast = useCustomToast()
   const [status, setStatus] = useState<KraStatus | null>(null)
 
-  const checkStatus = async () => {
+  const checkStatus = useCallback(async () => {
     try {
       // Simulate API call to check KRA status
       const response = await fetch("/api/kra/status")
@@ -45,7 +45,7 @@ export function KraStatusMonitor() {
       })
       toast.error("Failed to check KRA website status")
     }
-  }
+  }, [toast])
 
   useEffect(() => {
     // Initial check
