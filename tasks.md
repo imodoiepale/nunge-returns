@@ -9,7 +9,7 @@
   - Store form data and navigation state
   - Implement back button handling with cached data
   - Add cleanup mechanisms for session data
-  - Implement automatic user counter (#12345 format)
+  - Implement automatic user counter (#12345 format) from db and blockchain
 
 ### PIN Validation & Business Logic
 
@@ -67,7 +67,7 @@
 ### KRA Website Integration
 
 - [ ] Auto-ping System
-  - Create background service for website monitoring returns results in session card saying kra website traffic is oikay
+  - Create background service for website monitoring returns results in session card saying kra website traffic is okay
   - Implement auto-navigation to manufacturer details on start of sesssion
   - Add automatic login with PIN/password
   - Navigate to file returns page automatically on start of session
@@ -87,14 +87,14 @@
 - [ ] File Returns UI
   - Center-align important details
   - Implement purple highlight for ping button
-  - Optimize form layout for PIN and password
+  - Optimize form layout for PIN and password to be in first page instead
   - Add loading states and animations
 
 ### Dynamic Elements
 
 - [ ] Interactive Components
-  - Implement auto-increasing counter for "Trusted By" section from database
-  - Create affiliate-based color scheme system
+  - Implement auto-increasing counter for "Trusted By" in main page section from database
+  - Create affiliate-based color scheme system eg. nungereturns.com default primary purple, nunge.winguapps.co.ke to #7A1253
   - Design and implement error screens
   - Add responsive layouts
 
