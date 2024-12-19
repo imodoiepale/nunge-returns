@@ -94,9 +94,26 @@
 
 - [ ] Interactive Components
   - Implement auto-increasing counter for "Trusted By" in main page section from database
-  - Create affiliate-based color scheme system eg. nungereturns.com default primary purple, nunge.winguapps.co.ke to #7A1253
-  - Design and implement error screens
-  - Add responsive layouts
+  - Create affiliate-based color scheme system:
+    - nungereturns.com: default primary purple
+    - nunge.winguapps.co.ke: #7A1253
+    - Dynamically load theme based on domain
+  - Design and implement error screens with toast notifications
+  - Add responsive layouts with toast support
+
+### UI Components & Notifications
+
+- [ ] Toast Notifications System
+  - Implement custom react-hot-toast configuration
+  - Create themed toast styles matching affiliate colors
+  - Design toast layouts for different message types:
+    - Success notifications (returns filed, payment confirmed)
+    - Error messages (KRA issues, validation errors)
+    - Warning alerts (session timeouts, network issues)
+    - Info messages (status updates, tips)
+  - Add toast position configuration
+  - Implement toast queuing system
+  - Add custom animations and transitions
 
 ### AI Assistant Widget
 
