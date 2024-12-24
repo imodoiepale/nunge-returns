@@ -1,10 +1,43 @@
 // @ts-nocheck
+
+"use client"
+
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowRight, FileText, Shield, Zap } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { useEffect, useState } from 'react';
+import { supabase  } from '@/lib/supabaseClient';
 
 export default function Home() {
+  const [userCount, setUserCount] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchUserCount = async () => {
+      const { count, error } = await supabase
+        .from('sessions')
+        .select('*', { count: 'exact' })
+        .eq('status', 'completed');
+
+      if (!error && count !== null) {
+        setUserCount(count);
+      }
+    };
+
+    fetchUserCount();
+
+    const subscription = supabase
+      .channel('public:sessions')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sessions' }, payload => {
+        setUserCount(prevCount => prevCount + 1);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, []);
+
   return (
     <>
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 to-background pt-8">
@@ -12,9 +45,8 @@ export default function Home() {
         <div className="container relative z-10 mx-auto flex flex-col items-center justify-center gap-4 py-20 text-center md:py-24">
           <div className="absolute left-4 top-4 rounded-br-3xl bg-primary px-4 py-2 md:left-8 md:top-8">
             <p className="text-sm font-medium text-primary-foreground">
-              Trusted by <span className="font-bold">6,345+</span> Kenyans
+              Trusted by <span className="font-bold">{userCount}+</span> Kenyans
             </p>
-            
           </div>
           <div className="absolute top-4 right-4 animate-bounce duration-5000 md:top-8 md:right-8">
             <div className="relative h-[150px] w-[150px]">
