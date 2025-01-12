@@ -106,16 +106,7 @@ export function SiteFooter() {
       <div className="border-t border-purple-100">
         <div className="container px-4 py-6">
           <p className="text-center text-sm text-purple-600">
-            {new Date().getFullYear()} Nunge Returns. All rights reserved. Created by Hadeazy Digital Solutions in association with Nunge Returns.
-            <br />
-            <a
-              href="https://hadeazy.com"
-              className="text-sm text-purple-600 transition-colors hover:text-purple-800"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Hadeazy.com
-            </a>
+            &copy; 2025 Nunge Returns. All rights reserved. Developed by <a href="https://hadeazy.com" className="text-sm text-purple-600 transition-colors hover:text-purple-800" target="_blank" rel="noopener noreferrer">Hadeazy Digital Solutions</a>
           </p>
         </div>
       </div>
