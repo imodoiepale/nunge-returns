@@ -675,27 +675,22 @@ export default function FilePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center py-8 bg-gradient-to-br from-purple-50 via-white to-purple-50/30">
+    <div className="flex min-h-screen flex-col items-center py-8">
       <Link
         href="/"
-        className="absolute left-4 top-4 flex items-center text-sm font-medium text-purple-600 hover:text-purple-700"
+        className="absolute left-4 top-4 flex items-center text-sm font-medium text-muted-foreground"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back
       </Link>
 
       <div className="text-center mb-4">
-        <p className="text-lg font-semibold">
-          You are user number:{" "}
-          <span className="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent">
-            #{userCount}
-          </span>
-        </p>
-        <p className="text-sm text-purple-600">Thank you for using our service!</p>
+        <p className="text-lg font-semibold">You are user number: <span className="text-primary">#{userCount}</span></p>
+        <p className="text-sm text-muted-foreground">Thank you for using our service!</p>
       </div>
 
       <Card className={cn(
-        "w-full max-w-6xl relative bg-white/80 backdrop-blur-sm",
+        "w-full max-w-6xl relative",
         showWarning && "border-yellow-500"
       )}>
         <CardHeader>
@@ -705,30 +700,24 @@ export default function FilePage() {
                 "rounded-full px-4 py-2 flex items-center gap-2",
                 showWarning
                   ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white"
-                  : "bg-gradient-to-r from-purple-600 to-purple-400 text-white"
+                  : "bg-gradient-to-r from-purple-500 to-purple-700 text-white"
               )}>
                 <Clock className="w-4 h-4" />
                 <span className="font-mono">
-                  {Math.floor(sessionTime / 60)}:{(sessionTime % 60).toString().padStart(2, "0")}
+                  {Math.floor(sessionTime / 60)}:{(sessionTime % 60).toString().padStart(2, '0')}
                 </span>
               </div>
             </div>
           )}
 
-          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent">
-            File Your Returns
-          </CardTitle>
-          <CardDescription className="text-purple-600">
+          <CardTitle>File Your Returns</CardTitle>
+          <CardDescription>
             Step {step} of 4: {steps[step - 1]}
           </CardDescription>
           <div className="flex justify-between mt-4">
             {steps.map((s, index) => (
-              <div key={index} className={`flex flex-col items-center ${index < step ? "text-purple-600" : "text-purple-300"}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  index < step 
-                    ? "bg-gradient-to-r from-purple-600 to-purple-400 text-white" 
-                    : "bg-purple-100 text-purple-400"
-                }`}>
+              <div key={index} className={`flex flex-col items-center ${index < step ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${index < step ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                   {index < step ? <Check className="w-5 h-5" /> : index + 1}
                 </div>
                 <span className="text-xs mt-1">{s}</span>
@@ -738,37 +727,37 @@ export default function FilePage() {
         </CardHeader>
 
         <CardContent>
-          <div className={cn("flex gap-8", step === 1 ? "justify-center" : "")}>
-            {step > 1 && (
-              <div className="w-1/2 border-r border-purple-100 pr-8">
-                <h3 className="text-lg font-semibold mb-4 text-purple-800">Filled Details</h3>
-                <div className="rounded-lg border border-purple-100 bg-white/50 backdrop-blur-sm shadow-lg">
+          <div className="flex gap-8">
+            <div className="w-1/2 border-r pr-8">
+              <h3 className="text-lg font-semibold mb-4">Filled Details</h3>
+              {step > 1 && (
+                <div className="rounded-lg border border-gray-100 bg-white/50 backdrop-blur-sm shadow-lg">
                   <Table className="[&_tr:last-child]:border-0">
-                    <TableBody className="divide-y divide-purple-50">
-                      <TableRow className="hover:bg-purple-50/50 transition-colors">
-                        <TableCell className="font-medium text-purple-700 pl-6">PIN</TableCell>
-                        <TableCell className="font-mono tracking-wide text-purple-900">
+                    <TableBody className="divide-y divide-gray-50">
+                      <TableRow className="hover:bg-gray-50/50 transition-colors">
+                        <TableCell className="font-medium text-gray-700 pl-6">PIN</TableCell>
+                        <TableCell className="font-mono tracking-wide text-gray-900">
                           {formData.pin}
                         </TableCell>
                       </TableRow>
 
-                      <TableRow className="hover:bg-purple-50/50 transition-colors">
-                        <TableCell className="font-medium text-purple-700 pl-6">Password</TableCell>
+                      <TableRow className="hover:bg-gray-50/50 transition-colors">
+                        <TableCell className="font-medium text-gray-700 pl-6">Password</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-between">
-                            <div className="font-mono tracking-wide text-purple-900">
+                            <div className="font-mono tracking-wide text-gray-900">
                               {showPassword ? formData.password : "•".repeat(formData.password.length)}
                             </div>
                             <div className="flex items-center gap-3">
                               <button
                                 type="button"
-                                className="text-purple-500 hover:text-purple-700 transition-colors"
+                                className="text-gray-500 hover:text-gray-700 transition-colors"
                                 onClick={() => setShowPassword(!showPassword)}
                               >
                                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>
                               {passwordValidationStatus === "valid" && (
-                                <div className="rounded-full bg-gradient-to-r from-purple-600 to-purple-400 p-1">
+                                <div className="rounded-full bg-gradient-to-r from-green-500 to-green-600 p-1">
                                   <CheckCircle className="w-3.5 h-3.5 text-white" />
                                 </div>
                               )}
@@ -779,21 +768,21 @@ export default function FilePage() {
 
                       {step > 2 && manufacturerDetails && (
                         <>
-                          <TableRow className="hover:bg-purple-50/50 transition-colors">
-                            <TableCell className="font-medium text-purple-700 pl-6">Name</TableCell>
-                            <TableCell className="text-purple-900">
+                          <TableRow className="hover:bg-gray-50/50 transition-colors">
+                            <TableCell className="font-medium text-gray-700 pl-6">Name</TableCell>
+                            <TableCell className="text-gray-900">
                               {manufacturerDetails.name}
                             </TableCell>
                           </TableRow>
-                          <TableRow className="hover:bg-purple-50/50 transition-colors">
-                            <TableCell className="font-medium text-purple-700 pl-6">Email</TableCell>
-                            <TableCell className="text-purple-900">
+                          <TableRow className="hover:bg-gray-50/50 transition-colors">
+                            <TableCell className="font-medium text-gray-700 pl-6">Email</TableCell>
+                            <TableCell className="text-gray-900">
                               {manufacturerDetails.contactDetails.email}
                             </TableCell>
                           </TableRow>
-                          <TableRow className="hover:bg-purple-50/50 transition-colors">
-                            <TableCell className="font-medium text-purple-700 pl-6">Mobile</TableCell>
-                            <TableCell className="text-purple-900">
+                          <TableRow className="hover:bg-gray-50/50 transition-colors">
+                            <TableCell className="font-medium text-gray-700 pl-6">Mobile</TableCell>
+                            <TableCell className="text-gray-900">
                               {manufacturerDetails.contactDetails.mobile}
                             </TableCell>
                           </TableRow>
@@ -803,23 +792,23 @@ export default function FilePage() {
                       {(step === 3 || step === 4) && (
                         <>
                           {step > 2 && (
-                            <TableRow className="hover:bg-purple-50/50 transition-colors">
-                              <TableCell className="font-medium text-purple-700 pl-6">M-Pesa Number</TableCell>
-                              <TableCell className="font-mono text-purple-900">
+                            <TableRow className="hover:bg-gray-50/50 transition-colors">
+                              <TableCell className="font-medium text-gray-700 pl-6">M-Pesa Number</TableCell>
+                              <TableCell className="font-mono text-gray-900">
                                 {formData.mpesaNumber}
                               </TableCell>
                             </TableRow>
                           )}
-                          <TableRow className="hover:bg-purple-50/50 transition-colors">
-                            <TableCell className="font-medium text-purple-700 pl-6">Payment Status</TableCell>
+                          <TableRow className="hover:bg-gray-50/50 transition-colors">
+                            <TableCell className="font-medium text-gray-700 pl-6">Payment Status</TableCell>
                             <TableCell>
                               <Badge className={cn(
                                 "text-white font-medium",
                                 paymentStatus === "Paid"
                                   ? "bg-gradient-to-r from-green-500 to-green-600"
                                   : paymentStatus === "Processing"
-                                  ? "bg-gradient-to-r from-yellow-500 to-yellow-600"
-                                  : "bg-gradient-to-r from-purple-600 to-purple-400"
+                                    ? "bg-gradient-to-r from-yellow-500 to-yellow-600"
+                                    : "bg-gradient-to-r from-red-500 to-red-600"
                               )}>
                                 {paymentStatus}
                               </Badge>
@@ -830,65 +819,57 @@ export default function FilePage() {
                     </TableBody>
                   </Table>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            <div className={step === 1 ? "w-full max-w-md" : "w-1/2"}>
+            <div className="w-1/2">
               <form onSubmit={handleSubmit} className="space-y-4">
                 {step === 1 && (
                   <Step1PIN
-                    {...{ 
-                      pin: formData.pin,
-                      password: formData.password,
-                      error,
-                      passwordError,
-                      pinValidationStatus,
-                      passwordValidationStatus,
-                      onPINChange: handlePINChange,
-                      onPasswordChange: handlePasswordChange,
-                      onPasswordReset: handlePasswordReset,
-                      onPasswordEmailReset: handlePasswordEmailReset,
-                      onNext: () => setStep(2),
-                      onActiveTabChange: handleActiveTabChange,
-                      onManufacturerDetailsFound: setManufacturerDetails
-                    }}
+                    pin={formData.pin}
+                    password={formData.password}
+                    error={error}
+                    passwordError={passwordError}
+                    pinValidationStatus={pinValidationStatus}
+                    passwordValidationStatus={passwordValidationStatus}
+                    onPINChange={handlePINChange}
+                    onPasswordChange={handlePasswordChange}
+                    onPasswordReset={handlePasswordReset}
+                    onPasswordEmailReset={handlePasswordEmailReset}
+                    onNext={() => setStep(2)}
+                    onActiveTabChange={handleActiveTabChange}
+                    onManufacturerDetailsFound={setManufacturerDetails}
                   />
                 )}
 
                 {step === 2 && (
                   <Step2Details
-                    {...{
-                      loading,
-                      manufacturerDetails,
-                      onBack: () => setStep(1),
-                      onNext: () => setStep(3)
-                    }}
+                    loading={loading}
+                    manufacturerDetails={manufacturerDetails}
+                    onBack={() => setStep(1)}
+                    onNext={() => setStep(3)}
                   />
                 )}
 
                 {step === 3 && (
                   <Step3Payment
-                    {...{
-                      mpesaNumber: formData.mpesaNumber,
-                      paymentStatus,
-                      onMpesaNumberChange: (value) => setFormData({ ...formData, mpesaNumber: value }),
-                      onSimulatePayment: simulatePayment
-                    }}
+                    mpesaNumber={formData.mpesaNumber}
+                    paymentStatus={paymentStatus}
+                    onMpesaNumberChange={(value) => setFormData({ ...formData, mpesaNumber: value })}
+                    onSimulatePayment={simulatePayment}
                   />
                 )}
 
                 {step === 4 && (
                   <Step4Filing
-                    {...{
-                      pin: formData.pin,
-                      password: formData.password,
-                      error,
-                      filingStatus,
-                      sessionStartTime,
-                      onPasswordChange: (value) => setFormData({ ...formData, password: value }),
-                      onDownloadReceipt: downloadReceipt,
-                      onEndSession: endSession
-                    }}
+                    pin={formData.pin}
+                    password={formData.password}
+                    error={error}
+                    filingStatus={filingStatus}
+                    sessionStartTime={sessionStartTime}
+                    onPasswordChange={(value) => setFormData({ ...formData, password: value })}
+                    onDownloadReceipt={downloadReceipt}
+                    onEndSession={endSession}
                   />
                 )}
 
@@ -900,10 +881,10 @@ export default function FilePage() {
       </Card>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="sm:max-w-[425px] bg-white/95 backdrop-blur-sm border-purple-100">
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-purple-900">Active Session Found</DialogTitle>
-            <DialogDescription className="text-purple-800 space-y-2">
+            <DialogTitle>Active Session Found</DialogTitle>
+            <DialogDescription className="text-black space-y-2">
               <p>
                 There is an active session for <strong>{existingSessionData?.manufacturerName}</strong>
               </p>
@@ -918,14 +899,14 @@ export default function FilePage() {
           <DialogFooter className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
             <Button
               type="button"
-              onClick={() => handleDialogAction("cancel")}
-              className="flex-1 bg-gradient-to-r from-purple-600 to-purple-400 hover:from-purple-700 hover:to-purple-500"
+              onClick={() => handleDialogAction('cancel')}
+              className="flex-1 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
             >
               Keep Existing Session
             </Button>
             <Button
               type="button"
-              onClick={() => handleDialogAction("proceed")}
+              onClick={() => handleDialogAction('proceed')}
               className="flex-1 bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800"
             >
               End & Start New
@@ -935,38 +916,38 @@ export default function FilePage() {
       </Dialog>
 
       <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
-        <DialogContent className="bg-white/95 backdrop-blur-sm border-purple-100">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-purple-900">Session Timeout</DialogTitle>
-            <DialogDescription className="text-purple-800">
+            <DialogTitle>Session Timeout</DialogTitle>
+            <DialogDescription className="text-black">
               Your session has expired due to inactivity. You will need to start a new session.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               onClick={async () => {
-                const currentSessionId = sessionService.getData("currentSessionId");
+                const currentSessionId = sessionService.getData('currentSessionId');
 
                 if (currentSessionId) {
                   await supabase
-                    .from("sessions")
-                    .update({ status: "completed", completed_at: new Date().toISOString() })
-                    .eq("id", currentSessionId);
+                    .from('sessions')
+                    .update({ status: 'completed', completed_at: new Date().toISOString() })
+                    .eq('id', currentSessionId);
                 }
 
                 sessionService.clearAllData();
                 setShowTimeoutDialog(false);
-                window.location.href = "/file";
+                window.location.href = '/file';
               }}
-              className="bg-gradient-to-r from-purple-600 to-purple-400 hover:from-purple-700 hover:to-purple-500"
             >
               Start New Session
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
-  );
+  )
 }
 
 const steps = ["Enter PIN", "Confirm Details", "Payment", "File Returns"]

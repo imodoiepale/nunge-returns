@@ -96,11 +96,9 @@ export const fileNilReturn = async (credentials: {
       message: "Return filed successfully",
       receiptNumber: `NR${Math.random().toString().slice(2, 10)}`
     }
-  } catch (error: any) {
-    return {
-      status: "error",
-      message: "Failed to file return. Please try again."
-    }
+  } catch (error) {
+    console.error('Error filing nil return:', error);
+    return { status: "error", message: (error as Error).message };
   }
 }
 
@@ -139,7 +137,7 @@ export const resetPassword = async (pin: string): Promise<boolean> => {
   }
 }
 
-export const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
+const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
   try {
     const response = await fetch('/api/reset/email-password', {
       method: 'POST',
@@ -148,14 +146,17 @@ export const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
       },
       body: JSON.stringify({ pin }),
     })
-    
+
     const data = await response.json()
     return data.success
   } catch (error) {
-    console.error('Error initiating password and email reset:', error)
+    console.error('Error resetting email and password:', error)
     return false
   }
 }
+
+export { resetEmailAndPassword };
+export const resetPasswordAndEmail = resetEmailAndPassword;
 
 export const validatePIN = (pin: string): { isValid: boolean; error: string | null } => {
   if (!pin?.trim()) {

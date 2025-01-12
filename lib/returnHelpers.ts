@@ -94,6 +94,6 @@ export async function fileNilReturn({ pin, password }: { pin: string; password: 
     return { status: "success" };
   } catch (error) {
     console.error('Error filing nil return:', error);
-    return { status: "error", message: error.message };
+    return { status: "error", message: error instanceof Error ? error.message : 'An unknown error occurred' };
   }
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 
 export function SiteFooter() {
   const navigation = [
@@ -36,13 +37,23 @@ export function SiteFooter() {
         <div className="grid grid-cols-1 gap-12 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
           <div className="space-y-3">
             <Link href="/" className="inline-block group">
-              <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent group-hover:from-purple-700 group-hover:to-purple-500 transition-colors">
-                Nunge Returns
-              </h3>
+              <div className="flex items-center gap-2">
+                <Image
+                  src="/footer-logo.png"
+                  alt="Nunge Returns Logo"
+                  width={350}
+                  height={350}
+                />
+                {/* <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent group-hover:from-purple-700 group-hover:to-purple-500 transition-colors">
+                  Nunge Returns
+                </h3> */}
+              </div>
             </Link>
+
+            {/*             
             <p className="text-sm leading-6 text-purple-600">
               Simplifying tax returns for everyone
-            </p>
+            </p> */}
           </div>
           <div className="space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-purple-800">Product</h3>
@@ -95,7 +106,16 @@ export function SiteFooter() {
       <div className="border-t border-purple-100">
         <div className="container px-4 py-6">
           <p className="text-center text-sm text-purple-600">
-            {new Date().getFullYear()} Nunge Returns. All rights reserved.
+            {new Date().getFullYear()} Nunge Returns. All rights reserved. Created by Hadeazy Digital Solutions in association with Nunge Returns.
+            <br />
+            <a
+              href="https://hadeazy.com"
+              className="text-sm text-purple-600 transition-colors hover:text-purple-800"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Hadeazy.com
+            </a>
           </p>
         </div>
       </div>
