@@ -50,13 +50,13 @@ export default function Home() {
             </p>
           </div>
           <div className="absolute top-4 right-4 animate-bounce duration-5000 md:top-8 md:right-8">
-            <div className="relative h-[150px] w-[150px]">
+            <div className="relative h-[180px] w-[180px]">
               <Image
-                src="/kra-logo.png"
+                src="/simple-logo - with-text.png"
                 alt="Kenya Revenue Authority (KRA) logo"
-                width={120}
-                height={120}
-                className="object-contain"
+                width={350  }
+                height={350 }
+                className="object-contain rounded-2xl"
               />
             </div>
           </div>
