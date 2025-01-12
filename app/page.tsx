@@ -17,7 +17,8 @@ export default function Home() {
       const { count, error } = await supabase
         .from('sessions')
         .select('*', { count: 'exact' })
-        .eq('status', 'completed');
+        .eq('status', 'completed')
+        .eq('current_step', '4');
 
       if (!error && count !== null) {
         setUserCount(count);
@@ -53,8 +54,8 @@ export default function Home() {
               <Image
                 src="/kra-logo.png"
                 alt="Kenya Revenue Authority (KRA) logo"
-                width={150}
-                height={150}
+                width={120}
+                height={120}
                 className="object-contain"
               />
             </div>

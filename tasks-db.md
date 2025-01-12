@@ -10,7 +10,7 @@ CREATE TABLE users (
     email TEXT UNIQUE,
     phone TEXT,
     role TEXT CHECK (role IN ('user', 'admin', 'partner', 'enterprise')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
+    started_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -47,7 +47,7 @@ CREATE TABLE pins (
     pin_type TEXT CHECK (pin_type IN ('A', 'P')),
     is_individual BOOLEAN,
     business_details JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
+    started_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -60,7 +60,7 @@ CREATE TABLE returns (
     submission_date TIMESTAMPTZ,
     return_period TEXT,
     return_data JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- KRA Website Status
@@ -94,7 +94,7 @@ CREATE TABLE transactions (
     payment_method TEXT,
     mpesa_code TEXT,
     status TEXT CHECK (status IN ('pending', 'completed', 'failed')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
+    started_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -122,7 +122,7 @@ CREATE TABLE partners (
     partner_type TEXT CHECK (partner_type IN ('cyber', 'university', 'business')),
     commission_rate DECIMAL,
     status TEXT CHECK (status IN ('active', 'pending', 'inactive')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Partner Transactions
@@ -132,7 +132,7 @@ CREATE TABLE partner_transactions (
     transaction_id UUID REFERENCES transactions(id),
     commission_amount DECIMAL,
     status TEXT CHECK (status IN ('pending', 'paid')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -152,7 +152,7 @@ CREATE TABLE enterprise_requests (
     referral_source TEXT,
     additional_details TEXT,
     status TEXT CHECK (status IN ('new', 'contacted', 'converted', 'rejected')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -166,7 +166,7 @@ CREATE TABLE user_metrics (
     total_users INTEGER,
     active_users INTEGER,
     new_users INTEGER,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Transaction Metrics
@@ -176,7 +176,7 @@ CREATE TABLE transaction_metrics (
     total_amount DECIMAL,
     transaction_count INTEGER,
     success_rate DECIMAL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -190,7 +190,7 @@ CREATE TABLE blockchain_transactions (
     transaction_hash TEXT,
     block_number BIGINT,
     status TEXT CHECK (status IN ('pending', 'confirmed', 'failed')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -238,7 +238,7 @@ CREATE TABLE pro_user_analytics (
     successful_returns INTEGER,
     average_processing_time INTEGER,
     total_amount_paid DECIMAL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    started_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Pro User Scheduled Returns

@@ -1,9 +1,12 @@
+"use client"
+
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import Link from "next/link"
 
 export default function FAQPage() {
   const faqs = [
@@ -30,42 +33,49 @@ export default function FAQPage() {
     {
       question: "Can I file taxes for multiple years?",
       answer:
-        "Yes, our platform supports filing returns for previous tax years. You can access and file returns for up to 7 years back, subject to your subscription plan.",
-    },
-    {
-      question: "How do I know if my return is accurate?",
-      answer:
-        "Our system includes multiple accuracy checks and validation steps. We review your return for common errors, missing information, and potential audit triggers before submission.",
+        "Yes, you can file returns for previous tax years. However, please note that different rules and requirements may apply for past years, and our system will guide you through these differences.",
     },
     {
       question: "What payment methods do you accept?",
       answer:
-        "We accept all major credit cards, PayPal, and bank transfers. Payment is only required when you're ready to file your return, and you can try our platform for free.",
-    },
-    {
-      question: "How do I get my refund?",
-      answer:
-        "You can choose to receive your refund via direct deposit to your bank account (fastest method), paper check by mail, or apply it to next year's taxes.",
+        "We accept all major credit cards, debit cards, and bank transfers. Payment is only required after you've completed your return and are ready to file.",
     },
   ]
 
   return (
-    <div className=" py-16">
-      <div className="mx-auto max-w-2xl text-center">
-        <h1 className="text-4xl font-bold tracking-tight">Frequently Asked Questions</h1>
-        <p className="mt-6 text-lg text-muted-foreground">
-          Find answers to common questions about our tax filing service
-        </p>
-      </div>
-      <div className="mx-auto mt-16 max-w-3xl">
-        <Accordion type="single" collapsible className="w-full">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-emerald-50">
+      <div className="mx-auto max-w-3xl px-6 py-16">
+        <div className="text-center mb-12">
+          <h1 className="text-3xl font-bold text-indigo-900">Frequently Asked Questions</h1>
+          <p className="mt-2 text-indigo-600">
+            Find answers to common questions about our tax filing service
+          </p>
+        </div>
+
+        <div className="space-y-6">
           {faqs.map((faq, index) => (
-            <AccordionItem key={index} value={`item-${index}`}>
-              <AccordionTrigger>{faq.question}</AccordionTrigger>
-              <AccordionContent>{faq.answer}</AccordionContent>
-            </AccordionItem>
+            <div
+              key={index}
+              className="p-6 rounded-lg bg-white/80 backdrop-blur-sm border border-emerald-200 hover:border-emerald-300 transition-all duration-300 shadow-sm hover:shadow-md"
+            >
+              <h3 className="text-lg font-semibold text-indigo-900 mb-3">{faq.question}</h3>
+              <p className="text-indigo-800">{faq.answer}</p>
+            </div>
           ))}
-        </Accordion>
+        </div>
+
+        <div className="mt-12 p-6 rounded-lg bg-white/80 backdrop-blur-sm border border-emerald-200 text-center">
+          <h2 className="text-lg font-semibold text-indigo-900 mb-2">Still have questions?</h2>
+          <p className="text-indigo-800 mb-4">
+            Our support team is here to help you with any questions you may have.
+          </p>
+          <Link 
+            href="/contact"
+            className="inline-block px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors duration-300"
+          >
+            Contact Support
+          </Link>
+        </div>
       </div>
     </div>
   )

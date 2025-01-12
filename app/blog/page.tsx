@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-// import { ArrowRight } from "lucide-react"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
 interface BlogPost {
   id: number
@@ -77,93 +77,97 @@ export default function BlogPage() {
 
   if (isLoading) {
     return (
-      <div className="container py-24">
-        <div className="mx-auto max-w-7xl space-y-8">
-          <h1 className="text-4xl font-bold tracking-tighter">Loading...</h1>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-emerald-50">
+        <div className="container py-24">
+          <div className="mx-auto max-w-7xl space-y-8">
+            <h1 className="text-4xl font-bold tracking-tight text-indigo-900">Loading...</h1>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container py-24">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <h1 className="text-4xl font-bold tracking-tighter">Nunge Returns Blog</h1>
-        <p className="text-xl text-muted-foreground">
-          Stay updated with the latest news, tips, and insights about tax filing and compliance in Kenya.
-        </p>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-emerald-50">
+      <div className="container py-24">
+        <div className="mx-auto max-w-7xl space-y-8">
+          <h1 className="text-4xl font-bold tracking-tight text-indigo-900">Nunge Returns Blog</h1>
+          <p className="text-xl text-indigo-600">
+            Stay updated with the latest news, tips, and insights about tax filing and compliance in Kenya.
+          </p>
 
-        {/* Layout changes based on selection */}
-        <div className="grid grid-cols-4 gap-6">
-          {/* Left column: Blogs */}
-          <div
-            className={`space-y-4 ${
-              selectedPost ? "col-span-1" : "col-span-4 grid grid-cols-5 gap-6"
-            } transition-all duration-300`}
-          >
-            {blogPosts.map((post, index) => (
-              <article
-                key={post.id}
-                className={`group cursor-pointer rounded-lg border p-4 hover:bg-muted/50 ${
-                  selectedPost ? "flex items-center space-x-4 p-2" : ""
-                }`}
-                onClick={() => setSelectedPost(post)}
-              >
-                {/* Index for compact view */}
-                {selectedPost && (
-                  <span className="text-xs font-bold text-muted-foreground">{index + 1}.</span>
-                )}
-                <div className={`${selectedPost ? "w-12 h-12" : "relative h-32"} relative`}>
+          {/* Layout changes based on selection */}
+          <div className="grid grid-cols-4 gap-6">
+            {/* Left column: Blogs */}
+            <div
+              className={`space-y-4 ${
+                selectedPost ? "col-span-1" : "col-span-4 grid grid-cols-5 gap-6"
+              } transition-all duration-300`}
+            >
+              {blogPosts.map((post, index) => (
+                <article
+                  key={post.id}
+                  className={`group cursor-pointer rounded-lg border border-emerald-200 bg-white/80 hover:bg-white/90 ${
+                    selectedPost ? "flex items-center space-x-4 p-2" : "p-4"
+                  } transition-all duration-200 shadow-sm hover:shadow-md`}
+                  onClick={() => setSelectedPost(post)}
+                >
+                  {/* Index for compact view */}
+                  {selectedPost && (
+                    <span className="text-xs font-bold text-indigo-600">{index + 1}.</span>
+                  )}
+                  <div className={`${selectedPost ? "w-12 h-12" : "relative h-32"} relative`}>
+                    <Image
+                      src={post.image}
+                      alt={post.title}
+                      fill
+                      sizes={selectedPost ? "48px" : "(max-width: 768px) 100vw, 300px"}
+                      priority={index < 4 || post.id === selectedPost?.id}
+                      className="object-cover rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <h2
+                      className={`${
+                        selectedPost ? "text-sm font-medium" : "text-lg font-semibold"
+                      } text-indigo-800 group-hover:text-indigo-900`}
+                    >
+                      {post.title}
+                    </h2>
+                    {!selectedPost && (
+                      <p className="mt-1 text-xs text-indigo-600">Published on: {post.date}</p>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {/* Right column: Selected Post Preview */}
+            {selectedPost && (
+              <div className="col-span-3 sticky top-24 h-[calc(100vh-6rem)] overflow-auto rounded-lg border border-emerald-200 bg-white/80 p-6">
+                <h2 className="text-3xl font-bold mb-4 text-indigo-900">{selectedPost.title}</h2>
+                <p className="text-sm text-indigo-600 mb-4">Published on: {selectedPost.date}</p>
+                <div className="relative h-48 w-full mb-4">
                   <Image
-                    src={post.image}
-                    alt={post.title}
+                    src={selectedPost.image}
+                    alt={selectedPost.title}
                     fill
-                    sizes={selectedPost ? "48px" : "(max-width: 768px) 100vw, 300px"}
-                    priority={index < 4 || post.id === selectedPost?.id}
+                    sizes="(max-width: 768px) 100vw, 800px"
+                    priority
                     className="object-cover rounded-md"
+                    loading="eager"
                   />
                 </div>
-                <div>
-                  <h2
-                    className={`${
-                      selectedPost ? "text-sm font-medium" : "text-lg font-semibold"
-                    } group-hover:text-primary`}
-                  >
-                    {post.title}
-                  </h2>
-                  {!selectedPost && (
-                    <p className="mt-1 text-xs text-muted-foreground">Published on: {post.date}</p>
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {/* Right column: Selected Post Preview */}
-          {selectedPost && (
-            <div className="col-span-3 sticky top-24 h-[calc(100vh-6rem)] overflow-auto rounded-lg border p-6">
-              <h2 className="text-3xl font-bold mb-4">{selectedPost.title}</h2>
-              <p className="text-sm text-muted-foreground mb-4">Published on: {selectedPost.date}</p>
-              <div className="relative h-48 w-full mb-4">
-                <Image
-                  src={selectedPost.image}
-                  alt={selectedPost.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 800px"
-                  priority
-                  className="object-cover rounded-md"
-                  loading="eager"
-                />
+                <p className="text-lg text-indigo-800">{selectedPost.content}</p>
+                <button
+                  className="mt-6 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors"
+                  onClick={() => setSelectedPost(null)}
+                >
+                  Back to All Blogs
+                </button>
               </div>
-              <p className="text-lg">{selectedPost.content}</p>
-              <button
-                className="mt-6 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
-                onClick={() => setSelectedPost(null)}
-              >
-                Back to All Blogs
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

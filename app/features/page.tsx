@@ -37,24 +37,26 @@ export default function FeaturesPage() {
   ]
 
   return (
-    <div className="container py-16">
-      <div className="mx-auto max-w-2xl text-center">
-        <h1 className="text-4xl font-bold tracking-tight">Powerful Features for Effortless Tax Filing</h1>
-        <p className="mt-6 text-lg text-muted-foreground">
-          Everything you need to file your tax returns accurately and efficiently
-        </p>
-      </div>
-      <div className="mx-auto mt-16 max-w-5xl">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-          {features.map((feature) => (
-            <div key={feature.title} className="relative border p-8 rounded-lg">
-              <div className="flex items-center gap-4">
-                <CheckCircle2 className="h-6 w-6 text-green-500" />
-                <h3 className="font-semibold">{feature.title}</h3>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-emerald-50">
+      <div className="container py-16">
+        <div className="mx-auto max-w-2xl text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-indigo-900">Powerful Features for Effortless Tax Filing</h1>
+          <p className="mt-6 text-lg text-indigo-600">
+            Everything you need to file your tax returns accurately and efficiently
+          </p>
+        </div>
+        <div className="mx-auto mt-16 max-w-5xl">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+            {features.map((feature) => (
+              <div key={feature.title} className="relative border border-emerald-200 bg-white/80 p-8 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+                <div className="flex items-center gap-4">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                  <h3 className="font-semibold text-indigo-800">{feature.title}</h3>
+                </div>
+                <p className="mt-4 text-indigo-600">{feature.description}</p>
               </div>
-              <p className="mt-4 text-muted-foreground">{feature.description}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -115,7 +115,7 @@
   - Implement toast queuing system
   - Add custom animations and transitions
 
-### AI Assistant Widget
+###  
 
 - [ ] Implement Chat Widget
   - Add bottom-right floating widget

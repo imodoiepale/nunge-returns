@@ -1,4 +1,6 @@
-import { Shield, Lock, Server, UserCheck, AlertTriangle, FileCheck, Key, RefreshCw } from "lucide-react"
+"use client"
+
+import { Shield, Lock, Server, UserCheck, ShieldCheck, FileKey } from "lucide-react"
 
 export default function SecurityPage() {
   const securityFeatures = [
@@ -27,82 +29,53 @@ export default function SecurityPage() {
         "Optional two-factor authentication adds an extra layer of security to your account.",
     },
     {
-      icon: AlertTriangle,
-      title: "Fraud Detection",
+      icon: ShieldCheck,
+      title: "Compliance Standards",
       description:
-        "Advanced algorithms monitor for suspicious activity and unauthorized access attempts.",
+        "We adhere to international security standards and maintain compliance with relevant data protection regulations.",
     },
     {
-      icon: FileCheck,
-      title: "Secure Document Handling",
+      icon: FileKey,
+      title: "Secure File Handling",
       description:
-        "All uploaded documents are encrypted and securely stored with strict access controls.",
-    },
-    {
-      icon: Key,
-      title: "Access Controls",
-      description:
-        "Role-based access control ensures that employees only have access to necessary information.",
-    },
-    {
-      icon: RefreshCw,
-      title: "Automatic Backups",
-      description:
-        "Your data is automatically backed up to multiple secure locations to prevent loss.",
-    },
+        "All tax documents and sensitive files are encrypted and handled with the highest security measures.",
+    }
   ]
 
   return (
-    <div className=" py-16">
-      <div className="mx-auto max-w-2xl text-center">
-        <h1 className="text-4xl font-bold tracking-tight">Security First Approach</h1>
-        <p className="mt-6 text-lg text-muted-foreground">
-          Your security is our top priority. Learn about the measures we take to protect
-          your sensitive information.
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-emerald-50">
+      <div className="mx-auto max-w-5xl px-6 py-16">
+        <div className="text-center mb-12">
+          <h1 className="text-3xl font-bold text-indigo-900">Security First Approach</h1>
+          <p className="mt-2 text-indigo-600 max-w-2xl mx-auto">
+            Your security is our top priority. We employ industry-leading security measures to protect your sensitive information.
+          </p>
+        </div>
 
-      <div className="mx-auto mt-16 max-w-7xl">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {securityFeatures.map((feature) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {securityFeatures.map((feature, index) => {
             const Icon = feature.icon
             return (
               <div
-                key={feature.title}
-                className="relative rounded-lg border p-8 shadow-sm"
+                key={index}
+                className="p-6 rounded-lg bg-white/80 backdrop-blur-sm border border-emerald-200 hover:border-emerald-300 transition-all duration-300 shadow-sm hover:shadow-md group"
               >
-                <div className="flex items-center gap-4">
-                  <Icon className="h-6 w-6 text-primary" />
-                  <h3 className="font-semibold">{feature.title}</h3>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="p-2 rounded-full bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200 transition-colors duration-300">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-indigo-900">{feature.title}</h3>
                 </div>
-                <p className="mt-4 text-sm text-muted-foreground">
-                  {feature.description}
-                </p>
+                <p className="text-indigo-800">{feature.description}</p>
               </div>
             )
           })}
         </div>
 
-        <div className="mt-16 rounded-lg border p-8">
-          <h2 className="text-2xl font-semibold">Our Security Certifications</h2>
-          <p className="mt-4 text-muted-foreground">
-            We maintain compliance with major security standards and regularly undergo
-            independent security audits:
-          </p>
-          <ul className="mt-4 list-disc pl-6 space-y-2">
-            <li>SOC 2 Type II Certified</li>
-            <li>ISO 27001 Certified</li>
-            <li>PCI DSS Compliant</li>
-            <li>GDPR Compliant</li>
-          </ul>
-        </div>
-
-        <div className="mt-16">
-          <h2 className="text-2xl font-semibold">Report a Security Issue</h2>
-          <p className="mt-4 text-muted-foreground">
-            If you discover a security vulnerability, please report it to our security team
-            immediately at security@nungereturns.com. We take all security reports
-            seriously and will respond as quickly as possible.
+        <div className="mt-16 p-6 rounded-lg bg-white/80 backdrop-blur-sm border border-emerald-200">
+          <h2 className="text-xl font-semibold text-indigo-900 mb-4">Our Security Commitment</h2>
+          <p className="text-indigo-800">
+            At Nunge Returns, we understand the sensitive nature of tax information. That's why we've implemented comprehensive security measures to ensure your data remains protected at all times. Our team of security experts continuously monitors and updates our systems to maintain the highest level of protection.
           </p>
         </div>
       </div>

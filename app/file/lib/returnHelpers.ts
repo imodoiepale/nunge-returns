@@ -1,59 +1,15 @@
 // lib/returnHelpers.ts
 import { supabase } from '@/lib/supabaseClient'
-
-export interface PhysicalAddress {
-  descriptive: string
-}
-
-export interface PostalAddress {
-  postalCode: string
-  town: string
-  poBox: string
-}
-
-export interface ContactDetails {
-  mobile: string
-  email: string
-  secondaryEmail: string
-}
-
-export interface BusinessDetails {
-  name: string
-  registrationNumber: string
-  registrationDate: string
-  commencedDate: string
-}
-
-export interface ManufacturerDetails {
-  pin: string
-  name: string
-  physicalAddress: PhysicalAddress
-  postalAddress: PostalAddress
-  contactDetails: ContactDetails
-  businessDetails: BusinessDetails
-}
-
-export interface FormData {
-  pin: string
-  manufacturerName: string
-  email: string
-  mobileNumber: string
-  mpesaNumber: string
-  password: string
-}
-
-export interface FilingStatus {
-  loggedIn: boolean
-  filing: boolean
-  extracting: boolean
-  completed: boolean
-}
-
-export interface FileReturnResponse {
-  status: "success" | "error"
-  message: string
-  receiptNumber?: string
-}
+import { 
+  ManufacturerDetails, 
+  FileReturnResponse, 
+  PhysicalAddress,
+  PostalAddress,
+  ContactDetails,
+  BusinessDetails,
+  FormData,
+  FilingStatus 
+} from './types'
 
 export const extractManufacturerDetails = async (pin: string) => {
   try {
@@ -76,7 +32,63 @@ export const extractManufacturerDetails = async (pin: string) => {
   }
 }
 
-export const fileNilReturn = async (credentials: { pin: string; password: string }): Promise<FileReturnResponse> => {
+export const validatePassword = async (
+  pin: string, 
+  password: string,
+  setPasswordValidationStatus: (status: "idle" | "checking" | "invalid" | "valid") => void,
+  setPasswordError: (error: string | null) => void
+): Promise<boolean> => {
+  try {
+    setPasswordValidationStatus("checking")
+    
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    // Temporary validation: password is "1234"
+    const isValid = password === "1234"
+    
+    if (isValid) {
+      setPasswordValidationStatus("valid")
+      setPasswordError(null)
+      return true
+    } else {
+      setPasswordValidationStatus("invalid")
+      setPasswordError("Please enter the correct password.")
+      return false
+    }
+    
+    /* Commented out actual API call for later implementation
+    const response = await fetch('/api/validate-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pin, password }),
+    })
+    
+    const data = await response.json()
+    
+    if (data.success) {
+      setPasswordValidationStatus("valid")
+      setPasswordError(null)
+      return true
+    } else {
+      setPasswordValidationStatus("invalid")
+      setPasswordError("Please input the correct password.")
+      return false
+    }
+    */
+  } catch (error) {
+    setPasswordValidationStatus("invalid")
+    setPasswordError("Failed to validate password. Please try again.")
+    return false
+  }
+}
+
+export const fileNilReturn = async (credentials: { 
+  pin: string; 
+  password: string 
+}): Promise<FileReturnResponse> => {
   try {
     await new Promise(resolve => setTimeout(resolve, 2000))
     return {
@@ -92,21 +104,93 @@ export const fileNilReturn = async (credentials: { pin: string; password: string
   }
 }
 
-export const validatePIN = (pin: string): { isValid: boolean; error: string | null } => {
-  if (!pin) {
-    return { isValid: false, error: 'Please enter a KRA PIN.' }
+export const recoverPin = async (pin: string): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/recover/pin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pin }),
+    })
+    
+    const data = await response.json()
+    return data.success
+  } catch (error) {
+    console.error('Error initiating password reset:', error)
+    return false
   }
-  if (pin.length !== 11) {
-    return { isValid: false, error: 'KRA PIN must be exactly 11 characters long.' }
-  }
-  if (!/^[AP]/.test(pin)) {
-    return { isValid: false, error: 'KRA PIN must start with either A (for individuals) or P (for businesses).' }
-  }
-  if (!/^[AP]\d{9}/.test(pin)) {
-    return { isValid: false, error: 'KRA PIN must have exactly 9 digits after the first letter.' }
-  }
-  if (!/^[AP]\d{9}[A-Z]$/.test(pin)) {
-    return { isValid: false, error: 'KRA PIN must end with a letter (A-Z).' }
-  }
-  return { isValid: true, error: null }
 }
+export const resetPassword = async (pin: string): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/reset/password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pin }),
+    })
+    
+    const data = await response.json()
+    return data.success
+  } catch (error) {
+    console.error('Error initiating password reset:', error)
+    return false
+  }
+}
+
+export const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/reset/email-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pin }),
+    })
+    
+    const data = await response.json()
+    return data.success
+  } catch (error) {
+    console.error('Error initiating password and email reset:', error)
+    return false
+  }
+}
+
+export const validatePIN = (pin: string): { isValid: boolean; error: string | null } => {
+  if (!pin?.trim()) {
+    return { isValid: false, error: 'PIN is required' };
+  }
+
+  pin = pin.toUpperCase().trim();
+
+  // First check the starting letter before length
+  if (!pin.startsWith('A') && !pin.startsWith('P')) {
+    return { 
+      isValid: false, 
+      error: 'PIN must start with A (Individual) or P (Business)'
+    };
+  }
+
+  if (pin.length !== 11) {
+    return { isValid: false, error: 'PIN must be exactly 11 characters' };
+  }
+
+  const middleDigits = pin.substring(1, 10);
+  if (!/^\d{9}$/.test(middleDigits)) {
+    return { 
+      isValid: false, 
+      error: 'PIN must have exactly 9 digits after A/P and before final letter'
+    };
+  }
+
+  const lastChar = pin.charAt(10);
+  if (!/^[A-Z]$/.test(lastChar)) {
+    return {
+      isValid: false,
+      error: 'PIN must end with a letter A-Z'
+    };
+  }
+
+  return { isValid: true, error: null };
+};
