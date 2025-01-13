@@ -159,13 +159,42 @@ export default function FilePage() {
     }
   };
 
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePasswordChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPassword = e.target.value;
     setFormData(prev => ({ ...prev, password: newPassword }));
-    // Only reset validation if it was previously validated
-    if (passwordValidationStatus === "valid") {
+    
+    // Reset validation if password is empty
+    if (!newPassword) {
       setPasswordValidationStatus("idle");
       setPasswordError(null);
+      return;
+    }
+
+    // Only validate if we have a valid PIN
+    if (formData.pin && pinValidationStatus === "valid") {
+      setPasswordValidationStatus("checking");
+      try {
+        const response = await fetch('/api/validate-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ pin: formData.pin, password: newPassword }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setPasswordValidationStatus("valid");
+          setPasswordError(null);
+        } else {
+          setPasswordValidationStatus("invalid");
+          setPasswordError(data.message || "Invalid password");
+        }
+      } catch (error) {
+        setPasswordValidationStatus("invalid");
+        setPasswordError("Error validating password");
+      }
     }
   };
 
