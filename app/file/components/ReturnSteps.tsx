@@ -627,43 +627,165 @@ export function Step2Details({ loading, manufacturerDetails, onBack, onNext }: S
     )
 }
 
-export function Step3Payment({ mpesaNumber, paymentStatus, onMpesaNumberChange, onSimulatePayment }: Step3Props) {
+export function Step3Payment({
+    mpesaNumber,
+    paymentStatus,
+    onMpesaNumberChange,
+    onSimulatePayment
+}: Step3Props) {
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [merchantRequestId, setMerchantRequestId] = useState<string | null>(null)
+    const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null)
+
+    const handlePayment = async () => {
+        try {
+            setLoading(true)
+            setError(null)
+
+            // Format phone number to include country code if not present
+            const formattedPhone = mpesaNumber.replace(/[^0-9]/g, '').replace(/^0/, '254')
+
+            // Initiate payment
+            const response = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    phoneNumber: formattedPhone,
+                    amount: '50' // Fixed amount for now
+                })
+            })
+
+            const data = await response.json()
+
+            if (data.success) {
+                setMerchantRequestId(data.data.MerchantRequestID)
+                onSimulatePayment() // Set status to "Processing"
+                startPolling(data.data.MerchantRequestID)
+            } else {
+                throw new Error(data.message || 'Payment initiation failed')
+            }
+        } catch (error: any) {
+            setError(error.message || 'Failed to initiate payment')
+            console.error('Payment error:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const startPolling = (merchantRequestId: string) => {
+        // Clear any existing polling
+        if (pollInterval) {
+            clearInterval(pollInterval)
+        }
+
+        const interval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/transactions?merchantRequestId=${merchantRequestId}`)
+                const data = await response.json()
+
+                if (data.success && data.data) {
+                    switch (data.data.status) {
+                        case 'completed':
+                            clearInterval(interval)
+                            onSimulatePayment() // Set status to "Paid"
+                            break
+                        case 'failed':
+                        case 'cancelled_by_user':
+                        case 'timeout':
+                        case 'insufficient_balance':
+                            clearInterval(interval)
+                            setError(data.data.result_description || 'Payment failed')
+                            break
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking payment status:', error)
+            }
+        }, 2000)
+
+        setPollInterval(interval)
+    }
+
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => {
+            if (pollInterval) {
+                clearInterval(pollInterval)
+            }
+        }
+    }, [pollInterval])
+
     return (
-        <div className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="mpesaNumber">M-Pesa Number</Label>
-                <div className="flex">
-                    <Select defaultValue="254">
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select country" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="254">
-                                <div className="flex items-center">
-                                    <Flag className="mr-2 h-4 w-4" />
-                                    <span>+254 (Kenya)</span>
-                                </div>
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+        <div className="space-y-6">
+            <div>
+                <Label htmlFor="mpesa-number">M-Pesa Number</Label>
+                <div className="mt-2">
                     <Input
-                        id="mpesaNumber"
-                        className="flex-1 ml-2"
+                        id="mpesa-number"
+                        type="tel"
+                        placeholder="Enter M-Pesa number e.g., 0702047436"
                         value={mpesaNumber}
                         onChange={(e) => onMpesaNumberChange(e.target.value)}
-                        required
+                        className="w-full"
+                        disabled={paymentStatus !== "Not Paid"}
                     />
                 </div>
             </div>
-            <Button type="button" onClick={onSimulatePayment}>
-                Pay KSH 50
-            </Button>
-            {paymentStatus === "Processing" && (
-                <p className="text-yellow-500">Processing payment...</p>
+
+            {error && (
+                <div className="text-red-500 text-sm mt-2">
+                    {error}
+                </div>
             )}
-            {paymentStatus === "Paid" && (
-                <p className="text-green-500">Payment confirmed!</p>
-            )}
+
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Payment Status:</span>
+                    <Badge className={cn(
+                        "text-white font-medium",
+                        paymentStatus === "Paid"
+                            ? "bg-gradient-to-r from-green-500 to-green-600"
+                            : paymentStatus === "Processing"
+                                ? "bg-gradient-to-r from-yellow-500 to-yellow-600"
+                                : "bg-gradient-to-r from-red-500 to-red-600"
+                    )}>
+                        {paymentStatus}
+                    </Badge>
+                </div>
+
+                {paymentStatus === "Not Paid" && (
+                    <Button
+                        type="button"
+                        onClick={handlePayment}
+                        disabled={!mpesaNumber || loading}
+                        className="w-full bg-gradient-to-r from-purple-500 to-purple-700"
+                    >
+                        {loading ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Processing...
+                            </>
+                        ) : (
+                            'Pay Now'
+                        )}
+                    </Button>
+                )}
+
+                {paymentStatus === "Processing" && (
+                    <div className="text-center text-sm text-muted-foreground">
+                        Please check your phone for the M-Pesa prompt
+                    </div>
+                )}
+
+                {paymentStatus === "Paid" && (
+                    <div className="text-center text-sm text-green-600 font-medium">
+                        Payment completed successfully!
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
