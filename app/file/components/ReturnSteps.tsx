@@ -655,7 +655,7 @@ export function Step3Payment({
                 },
                 body: JSON.stringify({
                     phoneNumber: mpesaNumber,
-                    amount: '50' // Fixed amount for testing
+                    amount: '1' // Fixed amount for testing
                 })
             });
 
