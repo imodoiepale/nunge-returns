@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle } from 'lucide-react'
+import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, CheckCircleIcon, ExclamationTriangleIcon ,} from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
@@ -103,7 +103,11 @@ interface Step4Props {
     onEndSession: () => void
 }
 
-
+interface PaymentStatus {
+    status: 'completed' | 'insufficient_balance' | 'cancelled_by_user' | 'timeout' | 'failed' | 'pending';
+    transaction_code?: string;
+    result_description?: string;
+}
 
 export function Step1PIN({
     pin,
@@ -636,10 +640,12 @@ export function Step3Payment({
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [merchantRequestId, setMerchantRequestId] = useState<string | null>(null)
+    const [transactionCode, setTransactionCode] = useState<string | null>(null)
 
     const initiatePayment = async () => {
         setLoading(true)
         setError(null)
+        setTransactionCode(null)
         
         try {
             const response = await fetch('/api/transactions', {
@@ -652,6 +658,10 @@ export function Step3Payment({
                     amount: '50' // Fixed amount for testing
                 })
             });
+
+            if (!response.ok) {
+                throw new Error('Payment service error');
+            }
 
             const data = await response.json();
             
@@ -671,9 +681,17 @@ export function Step3Payment({
         }
     }
 
-    const checkPaymentStatus = async (merchantRequestId: string) => {
+    const checkPaymentStatus = async (merchantRequestId: string): Promise<PaymentStatus | null> => {
         try {
             const response = await fetch(`/api/transactions?merchantRequestId=${merchantRequestId}`);
+            
+            if (!response.ok) {
+                if (response.status === 408) {
+                    return { status: 'timeout', result_description: 'Payment request timed out' };
+                }
+                throw new Error('Status check failed');
+            }
+
             const data = await response.json();
             return data.data;
         } catch (error) {
@@ -695,12 +713,28 @@ export function Step3Payment({
                 switch (status.status) {
                     case 'completed':
                         clearInterval(pollInterval);
+                        setTransactionCode(status.transaction_code || null);
                         onSimulatePayment(); // Update UI to "Paid"
                         break;
                         
                     case 'insufficient_balance':
+                        clearInterval(pollInterval);
+                        setError('Insufficient balance in your M-Pesa account');
+                        onSimulatePayment(); // Reset payment status
+                        break;
+
                     case 'cancelled_by_user':
+                        clearInterval(pollInterval);
+                        setError('Payment was cancelled');
+                        onSimulatePayment(); // Reset payment status
+                        break;
+
                     case 'timeout':
+                        clearInterval(pollInterval);
+                        setError('Payment request timed out. Please try again');
+                        onSimulatePayment(); // Reset payment status
+                        break;
+                        
                     case 'failed':
                         clearInterval(pollInterval);
                         setError(status.result_description || 'Payment failed');
@@ -740,8 +774,16 @@ export function Step3Payment({
             </div>
 
             {error && (
-                <div className="text-red-500 text-sm mt-2">
+                <div className="text-red-500 text-sm mt-2 p-3 bg-red-50 rounded-md border border-red-200">
+                    <ExclamationTriangleIcon className="inline-block w-4 h-4 mr-2" />
                     {error}
+                </div>
+            )}
+
+            {transactionCode && (
+                <div className="text-green-600 text-sm mt-2 p-3 bg-green-50 rounded-md border border-green-200">
+                    <CheckCircleIcon className="inline-block w-4 h-4 mr-2" />
+                    Payment successful! Transaction code: {transactionCode}
                 </div>
             )}
 
@@ -770,13 +812,17 @@ export function Step3Payment({
                             Payment Completed
                         </>
                     ) : (
-                        "Pay Now"
+                        <>
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Pay KES 50
+                        </>
                     )}
                 </Button>
             </div>
 
             {paymentStatus === "Processing" && (
-                <div className="text-center text-sm text-muted-foreground">
+                <div className="text-center text-sm text-muted-foreground bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                    <PhoneIcon className="inline-block w-4 h-4 mr-2" />
                     Please check your phone for the M-Pesa prompt
                 </div>
             )}
