@@ -675,7 +675,8 @@ export default function FilePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center py-8">
+    <div className="flex min-h-screen flex-col items-center py-4 md:py-8 px-4">
+      {/* Back Link */}
       <Link
         href="/"
         className="absolute left-4 top-4 flex items-center text-sm font-medium text-muted-foreground"
@@ -683,66 +684,76 @@ export default function FilePage() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back
       </Link>
-
-      <div className="text-center mb-4">
-        <p className="text-lg font-semibold">You are user number: <span className="text-primary">#{userCount}</span></p>
-        <p className="text-sm text-muted-foreground">Thank you for using our service!</p>
+  
+      {/* User Counter */}
+      <div className="text-center mb-4 mt-12 md:mt-0">
+        <p className="text-base md:text-lg font-semibold">
+          You are user number: <span className="text-primary">#{userCount}</span>
+        </p>
+        <p className="text-xs md:text-sm text-muted-foreground">
+          Thank you for using our service!
+        </p>
       </div>
-
+  
+      {/* Main Card */}
       <Card className={cn(
         "w-full max-w-6xl relative",
         showWarning && "border-yellow-500"
       )}>
         <CardHeader>
+          {/* Session Timer */}
           {sessionStartTime && (
             <div className="absolute top-4 right-4">
               <div className={cn(
-                "rounded-full px-4 py-2 flex items-center gap-2",
+                "rounded-full px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 text-sm",
                 showWarning
                   ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white"
                   : "bg-gradient-to-r from-purple-500 to-purple-700 text-white"
               )}>
-                <Clock className="w-4 h-4" />
+                <Clock className="w-3 h-3 md:w-4 md:h-4" />
                 <span className="font-mono">
                   {Math.floor(sessionTime / 60)}:{(sessionTime % 60).toString().padStart(2, '0')}
                 </span>
               </div>
             </div>
           )}
-
-          <CardTitle>File Your Returns</CardTitle>
+  
+          <CardTitle className="text-xl md:text-2xl">File Your Returns</CardTitle>
           <CardDescription>
             Step {step} of 4: {steps[step - 1]}
           </CardDescription>
-          <div className="flex justify-between mt-4">
+  
+          {/* Progress Steps */}
+          <div className="flex justify-between mt-4 px-2">
             {steps.map((s, index) => (
               <div key={index} className={`flex flex-col items-center ${index < step ? 'text-primary' : 'text-muted-foreground'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${index < step ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                  {index < step ? <Check className="w-5 h-5" /> : index + 1}
+                <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm ${index < step ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                  {index < step ? <Check className="w-4 h-4" /> : index + 1}
                 </div>
-                <span className="text-xs mt-1">{s}</span>
+                <span className="text-[10px] md:text-xs mt-1 text-center hidden md:block">{s}</span>
               </div>
             ))}
           </div>
         </CardHeader>
-
+  
         <CardContent>
-          <div className="flex gap-8">
-            <div className="w-1/2 border-r pr-8">
-              <h3 className="text-lg font-semibold mb-4">Filled Details</h3>
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+            {/* Filled Details Section */}
+            <div className="w-full lg:w-1/2 lg:border-r lg:pr-8">
+              <h3 className="text-base md:text-lg font-semibold mb-4">Filled Details</h3>
               {step > 1 && (
-                <div className="rounded-lg border border-gray-100 bg-white/50 backdrop-blur-sm shadow-lg">
-                  <Table className="[&_tr:last-child]:border-0">
+                <div className="rounded-lg border border-gray-100 bg-white/50 backdrop-blur-sm shadow-lg overflow-x-auto">
+                  <Table className="[&_tr:last-child]:border-0 min-w-[300px]">
                     <TableBody className="divide-y divide-gray-50">
                       <TableRow className="hover:bg-gray-50/50 transition-colors">
-                        <TableCell className="font-medium text-gray-700 pl-6">PIN</TableCell>
+                        <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">PIN</TableCell>
                         <TableCell className="font-mono tracking-wide text-gray-900">
                           {formData.pin}
                         </TableCell>
                       </TableRow>
-
+  
                       <TableRow className="hover:bg-gray-50/50 transition-colors">
-                        <TableCell className="font-medium text-gray-700 pl-6">Password</TableCell>
+                        <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Password</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-between">
                             <div className="font-mono tracking-wide text-gray-900">
@@ -765,45 +776,43 @@ export default function FilePage() {
                           </div>
                         </TableCell>
                       </TableRow>
-
+  
                       {step > 2 && manufacturerDetails && (
                         <>
                           <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-6">Name</TableCell>
-                            <TableCell className="text-gray-900">
+                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Name</TableCell>
+                            <TableCell className="text-gray-900 break-words">
                               {manufacturerDetails.name}
                             </TableCell>
                           </TableRow>
                           <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-6">Email</TableCell>
-                            <TableCell className="text-gray-900">
+                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Email</TableCell>
+                            <TableCell className="text-gray-900 break-words">
                               {manufacturerDetails.contactDetails.email}
                             </TableCell>
                           </TableRow>
                           <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-6">Mobile</TableCell>
+                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Mobile</TableCell>
                             <TableCell className="text-gray-900">
                               {manufacturerDetails.contactDetails.mobile}
                             </TableCell>
                           </TableRow>
                         </>
                       )}
-
+  
                       {(step === 3 || step === 4) && (
                         <>
-                          {step > 2 && (
-                            <TableRow className="hover:bg-gray-50/50 transition-colors">
-                              <TableCell className="font-medium text-gray-700 pl-6">M-Pesa Number</TableCell>
-                              <TableCell className="font-mono text-gray-900">
-                                {formData.mpesaNumber}
-                              </TableCell>
-                            </TableRow>
-                          )}
                           <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-6">Payment Status</TableCell>
+                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">M-Pesa Number</TableCell>
+                            <TableCell className="font-mono text-gray-900">
+                              {formData.mpesaNumber}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="hover:bg-gray-50/50 transition-colors">
+                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Payment Status</TableCell>
                             <TableCell>
                               <Badge className={cn(
-                                "text-white font-medium",
+                                "text-white font-medium text-xs md:text-sm",
                                 paymentStatus === "Paid"
                                   ? "bg-gradient-to-r from-green-500 to-green-600"
                                   : paymentStatus === "Processing"
@@ -821,8 +830,9 @@ export default function FilePage() {
                 </div>
               )}
             </div>
-
-            <div className="w-1/2">
+  
+            {/* Form Section */}
+            <div className="w-full lg:w-1/2">
               <form onSubmit={handleSubmit} className="space-y-4">
                 {step === 1 && (
                   <Step1PIN
@@ -841,7 +851,7 @@ export default function FilePage() {
                     onManufacturerDetailsFound={setManufacturerDetails}
                   />
                 )}
-
+  
                 {step === 2 && (
                   <Step2Details
                     loading={loading}
@@ -850,7 +860,7 @@ export default function FilePage() {
                     onNext={() => setStep(3)}
                   />
                 )}
-
+  
                 {step === 3 && (
                   <Step3Payment
                     mpesaNumber={formData.mpesaNumber}
@@ -859,7 +869,7 @@ export default function FilePage() {
                     onSimulatePayment={simulatePayment}
                   />
                 )}
-
+  
                 {step === 4 && (
                   <Step4Filing
                     pin={formData.pin}
@@ -872,19 +882,23 @@ export default function FilePage() {
                     onEndSession={endSession}
                   />
                 )}
-
-                {renderStepButtons()}
+  
+                {/* Step Buttons */}
+                <div className="flex flex-col md:flex-row justify-between gap-2 mt-6">
+                  {renderStepButtons()}
+                </div>
               </form>
             </div>
           </div>
         </CardContent>
       </Card>
-
+  
+      {/* Session Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
           <DialogHeader>
-            <DialogTitle>Active Session Found</DialogTitle>
-            <DialogDescription className="text-black space-y-2">
+            <DialogTitle className="text-lg">Active Session Found</DialogTitle>
+            <DialogDescription className="text-black space-y-2 text-sm">
               <p>
                 There is an active session for <strong>{existingSessionData?.manufacturerName}</strong>
               </p>
@@ -895,57 +909,45 @@ export default function FilePage() {
               </p>
             </DialogDescription>
           </DialogHeader>
-
-          <DialogFooter className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
+  
+          <DialogFooter className="flex flex-col space-y-2">
             <Button
               type="button"
               onClick={() => handleDialogAction('cancel')}
-              className="flex-1 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
+              className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
             >
               Keep Existing Session
             </Button>
             <Button
               type="button"
               onClick={() => handleDialogAction('proceed')}
-              className="flex-1 bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800"
+              className="w-full bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800"
             >
               End & Start New
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+  
+      {/* Timeout Dialog */}
       <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
-        <DialogContent>
+        <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
           <DialogHeader>
-            <DialogTitle>Session Timeout</DialogTitle>
-            <DialogDescription className="text-black">
+            <DialogTitle className="text-lg">Session Timeout</DialogTitle>
+            <DialogDescription className="text-black text-sm">
               Your session has expired due to inactivity. You will need to start a new session.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
-              onClick={async () => {
-                const currentSessionId = sessionService.getData('currentSessionId');
-
-                if (currentSessionId) {
-                  await supabase
-                    .from('sessions')
-                    .update({ status: 'completed', completed_at: new Date().toISOString() })
-                    .eq('id', currentSessionId);
-                }
-
-                sessionService.clearAllData();
-                setShowTimeoutDialog(false);
-                window.location.href = '/file';
-              }}
+              onClick={endSession}
+              className="w-full bg-gradient-to-r from-purple-500 to-purple-700"
             >
               Start New Session
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   )
 }
