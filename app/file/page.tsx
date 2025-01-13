@@ -638,7 +638,7 @@ export default function FilePage() {
     if (filingStatus.completed) return null;
 
     return (
-      <div className="flex justify-between mt-4">
+      <div className="flex justify-between mt-4 space-x-4">
         {step > 1 && (
           <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
             Back
@@ -646,7 +646,7 @@ export default function FilePage() {
         )}
 
         {step === 1 && (
-          <div className="space-x-2">
+          <div className="space-x-4">
             {passwordValidationStatus !== "valid" && formData.activeTab === 'id' && (
               <Button
                 type="button"
@@ -913,7 +913,7 @@ export default function FilePage() {
                 )}
   
                 {/* Step Buttons */}
-                <div className="flex flex-col md:flex-row justify-between gap-2 mt-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:gap-2 mt-6 lg:mt-8">
                   {renderStepButtons()}
                 </div>
               </form>

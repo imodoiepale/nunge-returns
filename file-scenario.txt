@@ -1,0 +1,175 @@
+EMPLOYED BUT HAD RECORDS 
+
+
+const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('https://www.google.com/search?q=itax&oq=itax&gs_lcrp=EgZjaHJvbWUyBggAEEUYOdIBCDExNzJqMGoyqAIAsAIB&sourceid=chrome&ie=UTF-8');
+  await page.getByRole('link', { name: 'iTax - KRA KRA https://itax.' }).click();
+  await page.locator('#logid').click();
+  await page.locator('#logid').fill('A015652968H');
+  await page.getByRole('link', { name: 'Continue' }).click();
+  await page.locator('input[name="xxZTT9p2wQ"]').click();
+  await page.locator('input[name="xxZTT9p2wQ"]').fill('37708940');
+  await page.getByRole('textbox', { name: 'Please enter the result of' }).click();
+  await page.getByRole('textbox', { name: 'Please enter the result of' }).fill('140');
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('link', { name: 'File Nil Return' }).click();
+  await page.locator('#regType').selectOption('2');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('link', { name: 'View Filed Return' }).click();
+  await page.locator('#taxType').selectOption('2');
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Consult' }).click();
+  await page.getByRole('link', { name: 'File Nil Return' }).click();
+  await page.locator('#regType').selectOption('2');
+  await page.getByRole('button', { name: 'Next' }).click();
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await page.goto('https://itax.kra.go.ke/KRA-Portal/eReturns.htm?actionCode=fileNilReturn');
+  await page.getByRole('cell', { name: 'M_Details_of_PAYE_Deducted', exact: true }).click();
+  await page.getByText('You cannot file NIL Return as').click();
+
+  // ---------------------
+  await context.close();
+  await browser.close();
+})();
+
+
+getByRole('cell', { name: 'You cannot file NIL Return as you have Employment Income for the return period. Please file return using File Return option.', exact: true })
+
+
+
+NO RECORDS FOUND 
+
+ await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByRole('link', { name: 'View Filed Return' }).click();
+  await page.locator('#taxType').selectOption('2');
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Consult' }).click();
+  await page.getByRole('cell', { name: 'No Records Found', exact: true }).click();
+
+
+
+FILE RETURNS 
+
+const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext();
+  await page.goto('https://itax.kra.go.ke/KRA-Portal/eReturns.htm?actionCode=viewReturnData');
+  await page.getByRole('link', { name: 'File Nil Return' }).click();
+  await page.locator('#regType').selectOption('2');
+  await page.getByRole('button', { name: 'Next' }).click();
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('img', { name: 'Date selector' }).click();
+  await page.getByText('«').click();
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('cell', { name: '1', exact: true }).first().click();
+  await page.getByRole('img', { name: 'Date selector' }).click();
+  await page.getByRole('row', { name: 'Return Period To ', exact: true }).getByRole('cell').nth(1).click();
+  await page.locator('#txtPeriodFrom').click();
+  await page.locator('#txtPeriodFrom').fill('22/01/2024');
+  await page.locator('#txtPeriodFrom').press('Enter');
+  await page.locator('#txtPeriodTo').click();
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await page.goto('https://itax.kra.go.ke/KRA-Portal/eReturns.htm?actionCode=fileNilReturn#survey');
+  const page1Promise = page.waitForEvent('popup');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download Returns Receipt' }).click();
+  const page1 = await page1Promise;
+  const download = await downloadPromise;
+  await page1.close();
+
+  // ---------------------
+  await context.close();
+  await browser.close();
+})();
+
+
+
+IF ALREADY FILED 
+
+const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext();
+  await page.goto('https://itax.kra.go.ke/KRA-Portal/eReturns.htm?actionCode=fileNilReturn#survey');
+  const page2Promise = page.waitForEvent('popup');
+  const download1Promise = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download Returns Receipt' }).click();
+  const page2 = await page2Promise;
+  const download1 = await download1Promise;
+  await page2.close();
+  await page.getByRole('link', { name: 'Consult Payments' }).click();
+  await page.getByRole('textbox', { name: 'Please enter the result of' }).click();
+  await page.getByRole('textbox', { name: 'Please enter the result of' }).fill('109');
+  await page.getByText('>> Consult Payments All').click();
+  await page.getByRole('button', { name: 'Consult' }).click();
+  await page.getByRole('link', { name: 'View Filed Return' }).click();
+  await page.locator('#taxType').selectOption('2');
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Consult' }).click();
+  const page3Promise = page.waitForEvent('popup');
+  await page.getByRole('link', { name: 'View' }).click();
+  const page3 = await page3Promise;
+  await page3.close();
+  await page.getByRole('link', { name: 'File Nil Return' }).click();
+  await page.goto('https://itax.kra.go.ke/KRA-Portal/eReturns.htm?actionCode=loadPage&nilReturnFlag=Y&amendmentFlag=N');
+  await page.locator('#regType').selectOption('2');
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.goto('https://itax.kra.go.ke/KRA-Portal/eReturns.htm?actionCode=loadPage&nilReturnFlag=Y&amendmentFlag=N');
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.goto('https://itax.kra.go.ke/KRA-Portal/eReturns.htm?actionCode=loadPage&nilReturnFlag=Y&amendmentFlag=N');
+  page.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  // ---------------------
+  await context.close();
+  await browser.close();
+})();

@@ -10,6 +10,8 @@ interface PaymentResponse {
         amount?: string;
         phoneNumber?: string;
         timestamp?: string;
+        checkout_request_id?: string;
+        result_code?: string | null;
     };
     message?: string;
 }
@@ -66,37 +68,35 @@ export async function GET(request: Request) {
             `https://mpesa-stk-lc7z.onrender.com/api/check-status/${merchantRequestId}`
         );
 
-        const data: PaymentResponse = await response.json();
+        const data = await response.json();
 
-        // Enhanced response with specific status codes based on payment status
-        if (data.success && data.data) {
-            const { status } = data.data;
-            let statusCode = 200;
+        // Validate the status and transaction code
+        const isCompleted = data.data.status === 'completed' && 
+                          data.data.transaction_code && 
+                          data.data.transaction_code.length > 0;
 
-            switch (status) {
-                case 'completed':
-                    statusCode = 200;
-                    break;
-                case 'pending':
-                    statusCode = 202;
-                    break;
-                case 'insufficient_balance':
-                case 'cancelled_by_user':
-                case 'failed':
-                    statusCode = 400;
-                    break;
-                case 'timeout':
-                    statusCode = 408;
-                    break;
+        // Map the API response to our expected format
+        const mappedResponse: PaymentResponse = {
+            success: data.success,
+            data: {
+                MerchantRequestID: data.data.merchant_request_id,
+                status: isCompleted ? 'completed' : data.data.status,
+                transaction_code: data.data.transaction_code,
+                result_description: data.data.result_description,
+                amount: data.data.amount?.toString(),
+                result_code: data.data.result_code
             }
+        };
 
-            return NextResponse.json(data, { status: statusCode });
+        // Determine HTTP status code based on payment status
+        let statusCode = 200;
+        if (!isCompleted && data.data.status === 'pending') {
+            statusCode = 202;
+        } else if (data.data.status === 'failed' || data.data.result_code === '1') {
+            statusCode = 400;
         }
 
-        return NextResponse.json({
-            success: false,
-            message: 'Unable to retrieve payment status'
-        }, { status: 500 });
+        return NextResponse.json(mappedResponse, { status: statusCode });
 
     } catch (error) {
         console.error('Payment status check error:', error);

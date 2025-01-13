@@ -89,7 +89,7 @@ interface Step3Props {
     mpesaNumber: string
     paymentStatus: "Not Paid" | "Processing" | "Paid"
     onMpesaNumberChange: (value: string) => void
-    onSimulatePayment: () => void
+    onSimulatePayment: (status: "NotStarted" | "Processing" | "Paid") => void
 }
 
 interface Step4Props {
@@ -107,6 +107,7 @@ interface PaymentStatus {
     status: 'completed' | 'insufficient_balance' | 'cancelled_by_user' | 'timeout' | 'failed' | 'pending';
     transaction_code?: string;
     result_description?: string;
+    result_code?: string | null;
 }
 
 export function Step1PIN({
@@ -641,11 +642,20 @@ export function Step3Payment({
     const [error, setError] = useState<string | null>(null)
     const [merchantRequestId, setMerchantRequestId] = useState<string | null>(null)
     const [transactionCode, setTransactionCode] = useState<string | null>(null)
+    const [showPrompt, setShowPrompt] = useState(false)
+
+    const resetPaymentState = () => {
+        setError(null);
+        setTransactionCode(null);
+        setShowPrompt(false);
+        onSimulatePayment('NotStarted');
+    };
 
     const initiatePayment = async () => {
         setLoading(true)
         setError(null)
         setTransactionCode(null)
+        setShowPrompt(false)
         
         try {
             const response = await fetch('/api/transactions', {
@@ -667,15 +677,16 @@ export function Step3Payment({
             
             if (data.success) {
                 setMerchantRequestId(data.data.MerchantRequestID);
-                onSimulatePayment(); // Update UI to "Processing"
+                setShowPrompt(true);
+                onSimulatePayment('Processing'); // Update UI to "Processing"
                 startPolling(data.data.MerchantRequestID);
             } else {
                 setError(data.message || 'Failed to initiate payment');
-                onSimulatePayment(); // Reset payment status
+                resetPaymentState();
             }
         } catch (error) {
             setError('Failed to connect to payment service');
-            onSimulatePayment(); // Reset payment status
+            resetPaymentState();
         } finally {
             setLoading(false)
         }
@@ -685,7 +696,7 @@ export function Step3Payment({
         try {
             const response = await fetch(`/api/transactions?merchantRequestId=${merchantRequestId}`);
             
-            if (!response.ok) {
+            if (!response.ok && response.status !== 202) {
                 if (response.status === 408) {
                     return { status: 'timeout', result_description: 'Payment request timed out' };
                 }
@@ -693,6 +704,16 @@ export function Step3Payment({
             }
 
             const data = await response.json();
+            
+            // Validate transaction code
+            if (data.data.status === 'completed' && (!data.data.transaction_code || data.data.transaction_code.length === 0)) {
+                console.error('Received completed status but no transaction code');
+                return {
+                    status: 'pending',
+                    result_description: 'Waiting for transaction confirmation'
+                };
+            }
+            
             return data.data;
         } catch (error) {
             console.error('Error checking status:', error);
@@ -710,51 +731,64 @@ export function Step3Payment({
             const status = await checkPaymentStatus(merchantRequestId);
             
             if (status) {
+                if (status.result_code === '1') {
+                    clearInterval(pollInterval);
+                    setError('Payment failed: ' + (status.result_description || 'Transaction unsuccessful'));
+                    resetPaymentState();
+                    return;
+                }
+
                 switch (status.status) {
                     case 'completed':
-                        clearInterval(pollInterval);
-                        setTransactionCode(status.transaction_code || null);
-                        onSimulatePayment(); // Update UI to "Paid"
+                        if (status.transaction_code && status.transaction_code.length > 0) {
+                            clearInterval(pollInterval);
+                            setTransactionCode(status.transaction_code);
+                            setShowPrompt(false);
+                            onSimulatePayment('Paid');
+                        } else {
+                            console.log('Waiting for transaction code...');
+                        }
                         break;
                         
                     case 'insufficient_balance':
                         clearInterval(pollInterval);
                         setError('Insufficient balance in your M-Pesa account');
-                        onSimulatePayment(); // Reset payment status
+                        resetPaymentState();
                         break;
 
                     case 'cancelled_by_user':
                         clearInterval(pollInterval);
                         setError('Payment was cancelled');
-                        onSimulatePayment(); // Reset payment status
+                        resetPaymentState();
                         break;
 
                     case 'timeout':
                         clearInterval(pollInterval);
                         setError('Payment request timed out. Please try again');
-                        onSimulatePayment(); // Reset payment status
+                        resetPaymentState();
                         break;
                         
                     case 'failed':
                         clearInterval(pollInterval);
                         setError(status.result_description || 'Payment failed');
-                        onSimulatePayment(); // Reset payment status
+                        resetPaymentState();
                         break;
                         
                     case 'pending':
                         if (attempts >= maxAttempts) {
                             clearInterval(pollInterval);
                             setError('Payment timeout. Please check your M-Pesa messages.');
-                            onSimulatePayment(); // Reset payment status
+                            resetPaymentState();
                         }
+                        // Continue polling if still pending and within attempts limit
                         break;
                 }
             } else if (attempts >= maxAttempts) {
                 clearInterval(pollInterval);
                 setError('Could not determine payment status. Please check your M-Pesa messages.');
-                onSimulatePayment(); // Reset payment status
+                resetPaymentState();
             }
-        }, 2000); // Check every 2 seconds
+        }, 2000);
     }
 
     return (
@@ -787,26 +821,31 @@ export function Step3Payment({
                 </div>
             )}
 
-            <div className="flex justify-center">
+            <div className="flex justify-end">
                 <Button
                     type="button"
                     onClick={initiatePayment}
-                    disabled={!mpesaNumber || loading || paymentStatus === "Processing" || paymentStatus === "Paid"}
+                    disabled={!mpesaNumber || loading || showPrompt || transactionCode !== null}
                     className={cn(
-                        "w-full max-w-sm transition-all duration-200",
-                        loading || paymentStatus === "Processing"
+                        "w-auto max-w-sm transition-all duration-200",
+                        loading || showPrompt
                             ? "bg-yellow-500 cursor-not-allowed"
-                            : paymentStatus === "Paid"
+                            : transactionCode
                                 ? "bg-green-500 cursor-not-allowed"
                                 : "bg-purple-600 hover:bg-purple-700"
                     )}
                 >
-                    {loading || paymentStatus === "Processing" ? (
+                    {loading ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Initiating Payment...
+                        </>
+                    ) : showPrompt ? (
                         <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Processing Payment...
                         </>
-                    ) : paymentStatus === "Paid" ? (
+                    ) : transactionCode ? (
                         <>
                             <Check className="mr-2 h-4 w-4" />
                             Payment Completed
@@ -814,13 +853,13 @@ export function Step3Payment({
                     ) : (
                         <>
                             <CreditCard className="mr-2 h-4 w-4" />
-                            Pay KES 50
+                            Pay KES 1
                         </>
                     )}
                 </Button>
             </div>
 
-            {paymentStatus === "Processing" && (
+            {showPrompt && !error && !transactionCode && (
                 <div className="text-center text-sm text-muted-foreground bg-yellow-50 p-3 rounded-md border border-yellow-200">
                     <PhoneIcon className="inline-block w-4 h-4 mr-2" />
                     Please check your phone for the M-Pesa prompt
