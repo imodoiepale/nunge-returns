@@ -18,9 +18,7 @@ export default function RootLayout({
 }) {
   const headersList = headers()
   const hostname = headersList.get('host') || ''
-  console.log('Current hostname:', hostname)
   const theme = getDomainTheme(hostname)
-  console.log('Selected theme:', theme)
 
   return (
     <html lang="en" suppressHydrationWarning>
