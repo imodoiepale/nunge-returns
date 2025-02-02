@@ -251,12 +251,17 @@ class SessionManagementService {
     }
 
     saveData(key, data) {
-        if (!this.storage) return;
         try {
-            this.storage.setItem(key, JSON.stringify(data));
+            if (this.storage) {
+                this.storage.setItem(key, JSON.stringify(data));
+            }
         } catch (error) {
-            console.error('Error saving data:', error);
+            console.error('Error saving session data:', error);
         }
+    }
+
+    setData(key, data) {
+        return this.saveData(key, data);
     }
 
     getData(key) {

@@ -4,12 +4,18 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Badge, Check, CheckCircle, Clock, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Badge, Check, CheckCircle, Clock, Eye, EyeOff, ArrowDown } from 'lucide-react'
+import { Loader2 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { BlockchainLogs } from '@/components/avax/BlockchainLogs'
+import { NFTViewer } from '@/components/avax/NFTViewer'
+import { TransactionReceipt } from "@/components/avax/TransactionReceipt"
 
 import { Step1PIN, Step2Details, Step3Payment, Step4Filing } from "./components/ReturnSteps"
 import { FormData, ManufacturerDetails, FilingStatus } from './lib/types'
@@ -25,8 +31,11 @@ import {
 import { cn } from "@/lib/utils"
 import SessionManagementService from "@/src/sessionManagementService"
 import { supabase } from '@/lib/supabaseClient'
+import { blockchainService, SessionStatus } from '@/services/blockchainService'
+import { sessionService } from '@/services/sessionService'
+import { ethers } from 'ethers';
 
-const sessionService = new SessionManagementService()
+const sessionServiceInstance = new SessionManagementService()
 
 export default function FilePage() {
   const router = useRouter()
@@ -47,6 +56,7 @@ export default function FilePage() {
     filing: false,
     extracting: false,
     completed: false,
+    documents: false
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,6 +71,19 @@ export default function FilePage() {
   const [sessionTime, setSessionTime] = useState(300)
   const [showWarning, setShowWarning] = useState(false)
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null)
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false)
+  const [sessionDocuments, setSessionDocuments] = useState<any[]>([])
+  const [logs, setLogs] = useState<Array<{
+    timestamp: string, 
+    message: string, 
+    data?: any
+  }>>([])
+  const [filedDocuments, setFiledDocuments] = useState<any[]>([])
+  const [transactionReceipt, setTransactionReceipt] = useState<{
+    transactionHash?: string;
+    blockNumber?: number;
+    gasUsed?: string;
+} | null>(null);
 
   // Fetch user count
   useEffect(() => {
@@ -92,7 +115,7 @@ export default function FilePage() {
   useEffect(() => {
     const initializeSession = async () => {
       try {
-        await sessionService.createProspectSession();
+        await sessionServiceInstance.createProspectSession();
       } catch (error) {
         console.error('Error creating prospect session:', error);
       }
@@ -100,6 +123,16 @@ export default function FilePage() {
 
     initializeSession();
   }, []);
+
+  // Debug logging for sessionService
+  useEffect(() => {
+    console.log('SessionService methods:', {
+      setData: typeof sessionService.setData,
+      getData: typeof sessionService.getData,
+      removeData: typeof sessionService.removeData,
+      clearAll: typeof sessionService.clearAll
+    })
+  }, [])
 
   // Session timer effect
   useEffect(() => {
@@ -132,6 +165,27 @@ export default function FilePage() {
       if (timer) clearInterval(timer);
     };
   }, [sessionStartTime, step, filingStatus.completed]);
+
+  // Debug logging for filing status
+  useEffect(() => {
+    console.log('Current Filing Status:', {
+      loggedIn: filingStatus.loggedIn,
+      filing: filingStatus.filing,
+      extracting: filingStatus.extracting,
+      completed: filingStatus.completed,
+      documents: filingStatus.documents
+    })
+  }, [filingStatus])
+
+  useEffect(() => {
+    if (step === 4) {
+      setFilingStatus(prev => ({
+        ...prev,
+        completed: true,
+        documents: true
+      }))
+    }
+  }, [step])
 
   const handlePINChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPin = e.target.value.toUpperCase();
@@ -293,7 +347,8 @@ export default function FilePage() {
         loggedIn: false,
         filing: false,
         extracting: false,
-        completed: false
+        completed: false,
+        documents: false
     });
 
     // Format validation first
@@ -311,7 +366,7 @@ export default function FilePage() {
 
         try {
             // 1. First check for existing sessions
-            const existingSession = await sessionService.handlePinChange(newPin);
+            const existingSession = await sessionServiceInstance.handlePinChange(newPin);
 
             if (existingSession) {
                 // Store current state and show dialog
@@ -345,9 +400,9 @@ export default function FilePage() {
             }
 
             // 3. Update current session with new PIN and details
-            const currentSessionId = sessionService.getData('currentSessionId');
+            const currentSessionId = sessionServiceInstance.getData('currentSessionId');
             if (currentSessionId) {
-              await sessionService.updateSession(currentSessionId, {
+              await sessionServiceInstance.updateSession(currentSessionId, {
                 pin: newPin,
                 form_data: {
                   ...formData,
@@ -404,10 +459,10 @@ export default function FilePage() {
             setPinValidationStatus("invalid");
             
             // Attempt to mark session as error
-            const currentSessionId = sessionService.getData('currentSessionId');
+            const currentSessionId = sessionServiceInstance.getData('currentSessionId');
             if (currentSessionId) {
                 try {
-                    await sessionService.updateSession(currentSessionId, {
+                    await sessionServiceInstance.updateSession(currentSessionId, {
                         status: 'error',
                         error_message: error.message || 'Failed to verify PIN'
                     });
@@ -425,7 +480,34 @@ export default function FilePage() {
     }
 };
 
-  // Corresponding handleDialogAction function for PIN change confirmation
+  const handlePinValidation = async (newPin: string) => {
+    if (newPin.length === 11) {
+      setLoading(true);
+      try {
+        const response = await validatePIN(newPin);
+        if (response.success) {
+          const details = response.data;
+          
+          // Create session and track on blockchain
+          const sessionId = await sessionServiceInstance.createProspectSession();
+          await blockchainService.trackFilingSession(newPin, sessionId);
+          
+          // Rest of the PIN validation code
+          setPinValidationStatus("valid");
+          setManufacturerDetails(details);
+        } else {
+          setPinValidationStatus("invalid");
+        }
+      } catch (error) {
+        setPinValidationStatus("invalid");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setPinValidationStatus("idle");
+    }
+  };
+
   const handleDialogAction = async (action: 'proceed' | 'cancel') => {
     setShowDialog(false);
 
@@ -446,7 +528,7 @@ export default function FilePage() {
           setLoading(true);
 
           // Complete existing session
-          await sessionService.completeSession(existingSessionData.id);
+          await sessionServiceInstance.completeSession(existingSessionData.id);
 
           // Clear states
           setManufacturerDetails(null);
@@ -456,7 +538,7 @@ export default function FilePage() {
           const newPin = existingSessionData.originalPin;
           if (newPin) {
             // Create or update session with user_id
-            const currentSessionId = sessionService.getData('currentSessionId');
+            const currentSessionId = sessionServiceInstance.getData('currentSessionId');
             if (currentSessionId) {
               const userDetails = await extractManufacturerDetails(newPin);
 
@@ -481,7 +563,7 @@ export default function FilePage() {
               if (userError) throw userError;
 
               // Update session with user_id and details
-              await sessionService.updateSession(currentSessionId, {
+              await sessionServiceInstance.updateSession(currentSessionId, {
                 pin: newPin,
                 user_id: userData.id,
                 status: 'active',
@@ -534,47 +616,214 @@ export default function FilePage() {
     setExistingSessionData(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+  const logEvent = (message: string, data?: any) => {
+    const timestamp = new Date().toISOString()
+    const logEntry = `[${timestamp}] ${message}`
+    
+    console.log(logEntry, data || '')
+    
+    // Optional: Store logs in state if you want to display them in the UI
+    setLogs(prevLogs => [...prevLogs, { timestamp, message, data }])
+  }
 
-    if (step === 1) {
-      const isPasswordValid = await validatePassword(
-        formData.pin,
-        formData.password,
-        setPasswordValidationStatus,
-        setPasswordError
-      )
-      if (!isPasswordValid) return
-      setStep(2)
-    }
-
-    if (step === 4) {
-      setFilingStatus(prev => ({ ...prev, loggedIn: true }))
-
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setLogs([]);
+  
+    // Generate a unique session ID using ethers utils for consistency with blockchain
+    const currentSessionId = ethers.id(`${formData.pin}_${Date.now()}`);
+    
+    logEvent('Filing process started', { 
+      pin: formData.pin, 
+      sessionId: currentSessionId,
+      timestamp: new Date().toISOString()
+    });
+    
+    sessionServiceInstance.setData('currentSessionId', currentSessionId);
+  
+    try {
+      // Initialize blockchain session
+      const minAmount = 0.00001; // Minimum AVAX required
+      logEvent('Initializing blockchain session', {
+        pin: formData.pin,
+        amount: minAmount,
+        amountInWei: ethers.parseEther(minAmount.toString()).toString()
+      });
+  
+      // Track filing session with proper error handling
+      let blockchainSession;
       try {
-        const result = await fileNilReturn({
-          pin: formData.pin,
-          password: formData.password
-        })
-
-        if (result.status === "success") {
-          setFilingStatus({
-            loggedIn: true,
-            filing: true,
-            extracting: true,
-            completed: true
-          })
-        } else {
-          throw new Error(result.message)
-        }
-      } catch (error) {
-        setError('Failed to complete filing process')
+        blockchainSession = await blockchainService.trackFilingSession(
+          formData.pin,
+          minAmount
+        );
+  
+        logEvent('Blockchain session created', {
+          sessionId: currentSessionId,
+          transactionHash: blockchainSession.transactionHash,
+          status: blockchainSession.status
+        });
+  
+        setFilingStatus(prev => ({
+          ...prev,
+          loggedIn: true,
+          filing: true,
+          extracting: true
+        }));
+        
+        // Store transaction receipt
+        setTransactionReceipt({
+          transactionHash: blockchainSession.transactionHash,
+          blockNumber: blockchainSession.blockNumber,
+          gasUsed: blockchainSession.gasUsed?.toString()
+        });
+      } catch (blockchainError) {
+        logEvent('Blockchain session creation failed', {
+          error: blockchainError instanceof Error ? blockchainError.message : 'Unknown error'
+        });
+        // Continue process despite blockchain error
       }
+  
+      // Process nil return filing
+      const filingResult = await fileNilReturn({
+        pin: formData.pin,
+        password: formData.password,
+        sessionId: currentSessionId
+      });
+  
+      if (filingResult.success) {
+        // Update blockchain status and issue certificate
+        try {
+          if (blockchainSession) {
+            await blockchainService.updateSessionStatus(currentSessionId, SessionStatus.COMPLETED);
+            
+            const certificateMetadata = {
+              kraPin: formData.pin,
+              sessionId: currentSessionId,
+              filingDate: new Date().toISOString(),
+              taxYear: new Date().getFullYear(),
+              status: "Valid"
+            };
+  
+            await blockchainService.issueCertificate(
+              formData.pin,
+              currentSessionId,
+              JSON.stringify(certificateMetadata)
+            );
+  
+            logEvent('Certificate issued successfully');
+          }
+        } catch (certError) {
+          logEvent('Certificate issuance failed', {
+            error: certError instanceof Error ? certError.message : 'Unknown error'
+          });
+        }
+  
+        // Retrieve and process documents
+        const documents = await retrieveFiledDocuments(formData.pin, currentSessionId);
+        setFiledDocuments(documents);
+        
+        setFilingStatus(prev => ({
+          ...prev,
+          completed: true,
+          documents: true
+        }));
+        
+        setStep(4);
+        
+        logEvent('Filing completed successfully', {
+          documentCount: documents.length
+        });
+      } else {
+        const errorMessage = filingResult.error || 'Filing process failed';
+        setError(errorMessage);
+        logEvent('Filing failed', { error: errorMessage });
+  
+        try {
+          if (blockchainSession) {
+            await blockchainService.updateSessionStatus(currentSessionId, SessionStatus.FAILED);
+          }
+        } catch (statusError) {
+          logEvent('Failed to update blockchain status', {
+            error: statusError instanceof Error ? statusError.message : 'Unknown error'
+          });
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setError(errorMessage);
+      logEvent('Process failed', { error: errorMessage });
+  
+      try {
+        await blockchainService.updateSessionStatus(currentSessionId, SessionStatus.FAILED);
+      } catch (statusError) {
+        logEvent('Status update failed', { error: statusError });
+      }
+    } finally {
+      setLoading(false);
+      logEvent('Process finished');
+    }
+  };
+
+  const retrieveFiledDocuments = async (pin: string, sessionId: string) => {
+    try {
+      // Placeholder for document retrieval logic
+      const mockDocuments = [
+        {
+          id: '1',
+          name: 'Tax Return Document',
+          type: 'PDF',
+          url: `/documents/${pin}/tax-return.pdf`,
+          date: new Date().toISOString()
+        },
+        {
+          id: '2',
+          name: 'Income Statement',
+          type: 'PDF',
+          url: `/documents/${pin}/income-statement.pdf`,
+          date: new Date().toISOString()
+        }
+      ]
+      
+      logEvent('Documents retrieved', { documentCount: mockDocuments.length })
+      return mockDocuments
+    } catch (error) {
+      logEvent('Document retrieval error', { error })
+      return []
     }
   }
 
+  const downloadReceipt = (type: 'acknowledgement' | 'purchase' | 'all') => {
+    try {
+      // Generate a unique receipt number
+      const receiptNumber = `NR${Math.random().toString().slice(2, 10)}`
+      
+      // Simulate document generation
+      const documentUrls = {
+        acknowledgement: `/receipts/${formData.pin}/acknowledgement-${receiptNumber}.pdf`,
+        purchase: `/receipts/${formData.pin}/purchase-${receiptNumber}.pdf`,
+        all: `/receipts/${formData.pin}/all-${receiptNumber}.pdf`
+      }
 
-  // Handle password reset
+      // Download the document
+      const link = document.createElement('a');
+      link.href = '/nunge.pdf';
+      const fileName = `${manufacturerDetails?.name || 'Unknown'} - ${type} Receipt.pdf`
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Log the download
+      logEvent('Receipt downloaded', { type, receiptNumber })
+    } catch (error) {
+      console.error('Receipt download error:', error)
+      setError('Failed to download receipt')
+    }
+  }
+
   const handlePasswordReset = async () => {
     const success = await resetPassword(formData.pin)
     if (success) {
@@ -584,7 +833,6 @@ export default function FilePage() {
     }
   }
 
-  // Handle password and email reset
   const handlePasswordEmailReset = async () => {
     const success = await resetPasswordAndEmail(formData.pin)
     if (success) {
@@ -594,33 +842,54 @@ export default function FilePage() {
     }
   }
 
-  // Simulate payment
   const simulatePayment = () => {
     setPaymentStatus("Processing")
+    
+    // Simulate payment processing
     setTimeout(() => {
-      setPaymentStatus("Paid")
-    }, 2000)
+      // Randomly decide payment success
+      const isSuccessful = Math.random() > 0.2 // 80% success rate
+      
+      if (isSuccessful) {
+        setPaymentStatus("Paid")
+        setStep(4)
+      } else {
+        setPaymentStatus("Failed")
+        setError("Payment simulation failed. Please try again.")
+      }
+    }, 3000) // 3-second simulation
   }
 
-  // Handle receipt download
-  const downloadReceipt = (type: string) => {
-    const link = document.createElement('a')
-    link.href = '/receipt.pdf'  // Replace with actual receipt URL
-    link.download = `${manufacturerDetails?.name || 'Unknown'}_${type}_receipt.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const handlePayNow = async () => {
+    setIsPaymentProcessing(true);
+    try {
+      const sessionId = sessionServiceInstance.getData('currentSessionId');
+      if (!sessionId) throw new Error('No active session found');
 
-    if (type === 'all') {
-      setTimeout(() => {
-        window.location.href = '/'
-      }, 2000)
+      // Submit transaction to blockchain
+      await blockchainService.submitTransaction({
+        sessionId,
+        pin: formData.pin,
+        amount: "1000", // Replace with actual amount
+      });
+
+      setPaymentStatus("Paid");
+      await blockchainService.updateSessionStatus(sessionId, SessionStatus.PAYMENT_RECEIVED);
+      
+      // Rest of payment handling code
+    } catch (error) {
+      console.error('Blockchain payment tracking error:', error)
+      setError('Payment processing failed')
+      setPaymentStatus("Failed")
+    } finally {
+      // Re-enable the button
+      setIsPaymentProcessing(false)
     }
   }
 
   // Handle session end
   const endSession = async () => {
-    const currentSessionId = sessionService.getData('currentSessionId');
+    const currentSessionId = sessionServiceInstance.getData('currentSessionId');
 
     if (currentSessionId) {
       await supabase
@@ -629,7 +898,7 @@ export default function FilePage() {
         .eq('id', currentSessionId);
     }
 
-    sessionService.clearAllData();
+    sessionServiceInstance.clearAllData();
     setShowTimeoutDialog(false);
     window.location.href = '/file';
   }
@@ -703,8 +972,31 @@ export default function FilePage() {
     );
   };
 
+  // Log Display Component
+  const LogDisplay = () => {
+    return (
+      <div className="mt-4 p-4 bg-gray-100 rounded-md max-h-60 overflow-y-auto">
+        <h3 className="font-bold mb-2">Process Logs</h3>
+        {logs.map((log, index) => (
+          <div 
+            key={index} 
+            className="text-xs mb-1 p-1 bg-white rounded"
+          >
+            <span className="font-semibold text-gray-600">{log.timestamp}</span>: 
+            {log.message}
+            {log.data && (
+              <pre className="text-xs text-gray-500 mt-1">
+                {JSON.stringify(log.data, null, 2)}
+              </pre>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center py-4 md:py-8 px-4">
+    <div className="container mx-auto px-4 py-8">
       {/* Back Link */}
       <Link
         href="/"
@@ -891,12 +1183,71 @@ export default function FilePage() {
                 )}
   
                 {step === 3 && (
-                  <Step3Payment
-                    mpesaNumber={formData.mpesaNumber}
-                    paymentStatus={paymentStatus}
-                    onMpesaNumberChange={(value) => setFormData({ ...formData, mpesaNumber: value })}
-                    onSimulatePayment={simulatePayment}
-                  />
+                  <div className="space-y-4">
+                    <div className="bg-white shadow-md rounded-lg p-6">
+                      <h2 className="text-2xl font-bold mb-4 text-gray-800">Payment Details</h2>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="mpesaNumber" className="block mb-2">M-Pesa Number</Label>
+                          <Input
+                            id="mpesaNumber"
+                            type="tel"
+                            placeholder="Enter M-Pesa Number"
+                            value={formData.mpesaNumber}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              // Only allow numbers
+                              const numericValue = value.replace(/\D/g, '')
+                              setFormData({ ...formData, mpesaNumber: numericValue })
+                            }}
+                            className="w-full"
+                            maxLength={10}
+                          />
+                        </div>
+                        
+                        <div className="flex items-center space-x-4">
+                          <Button 
+                            onClick={simulatePayment} 
+                            variant="outline" 
+                            className="w-full"
+                          >
+                            Simulate Payment
+                          </Button>
+                          
+                          <Button 
+                            onClick={handlePayNow} 
+                            disabled={!formData.mpesaNumber || isPaymentProcessing}
+                            className="w-full bg-purple-600 text-white hover:bg-purple-700"
+                          >
+                            {isPaymentProcessing ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              "Pay Now"
+                            )}
+                          </Button>
+                        </div>
+                        
+                        <div className="text-center">
+                          <Badge 
+                            className={cn(
+                              "text-white font-medium text-xs md:text-sm",
+                              paymentStatus === "Paid"
+                                ? "bg-gradient-to-r from-green-500 to-green-600"
+                                : paymentStatus === "Processing"
+                                  ? "bg-gradient-to-r from-yellow-500 to-yellow-600"
+                                  : "bg-gradient-to-r from-red-500 to-red-600"
+                            )}
+                          >
+                            Payment Status: {paymentStatus}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
   
                 {step === 4 && (
@@ -906,6 +1257,7 @@ export default function FilePage() {
                     error={error}
                     filingStatus={filingStatus}
                     sessionStartTime={sessionStartTime}
+                    transactionDetails={transactionReceipt}
                     onPasswordChange={(value) => setFormData({ ...formData, password: value })}
                     onDownloadReceipt={downloadReceipt}
                     onEndSession={endSession}
@@ -970,13 +1322,36 @@ export default function FilePage() {
           <DialogFooter>
             <Button
               onClick={endSession}
-              className="w-full bg-gradient-to-r from-purple-500 to-purple-700"
+              className="w-full bg-purple-600 text-white hover:bg-purple-700"
             >
               Start New Session
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+  
+      {/* NFT Viewer */}
+      {filingStatus.completed && (
+        <div className="mt-8">
+          <NFTViewer pin={formData.pin} />
+        </div>
+      )}
+  
+      {/* Blockchain Logs */}
+      <div className="mt-8">
+        <BlockchainLogs />
+      </div>
+  
+      {/* Transaction Receipt */}
+      {transactionReceipt && (
+        <div className="mt-8">
+          <TransactionReceipt
+            transactionHash={transactionReceipt.transactionHash}
+            blockNumber={transactionReceipt.blockNumber}
+            gasUsed={transactionReceipt.gasUsed}
+          />
+        </div>
+      )}
     </div>
   )
 }

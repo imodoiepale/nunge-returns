@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-02-01T08:55:07.049Z",
+  "success": false,
+  "logs": [
+    "Testing with account: 0xaC88637372Fd09E14992915B15e863b440209FF2",
+    "Account balance: 673734116973734117",
+    "\nCreating session...",
+    "Session ID: TEST1738400081765",
+    "Amount: 0.0000001 AVAX",
+    "Session created. Tx: 0xa5c1843ba443b4b1099525e5a7f67b1db3fa6f330a7086f9f4376cf8860d1795",
+    "\nRecording payment...",
+    "Payment recorded. Tx: 0x272a987b1f89dbcdaa6aa5b49317f61f56f31eb6e6b71e1313e058140f1d867c",
+    "\nUpdating session status...",
+    "Status updated. Tx: 0xf223a222f5e4905ca001c5f6aa5b8ef9a4a2f849183cd012450b95029d51fc5d",
+    "\nMinting certificate...",
+    "Certificate minted. Tx: 0xd0639383e6a171e519f5104c13137c8da8223001a17b807cc685a928317fda51",
+    "\nFetching session details...",
+    "\nTest failed!",
+    "ProviderError: execution reverted: Session does not exist"
+  ],
+  "error": "ProviderError: execution reverted: Session does not exist"
+}

@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, CheckCircleIcon, ExclamationTriangleIcon ,} from 'lucide-react'
+import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, CheckCircle as CheckCircleIcon, Triangle as ExclamationTriangleIcon } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { ethers } from 'ethers';
 
 interface FilingStatus {
     loggedIn: boolean
@@ -98,6 +99,11 @@ interface Step4Props {
     error: string | null
     filingStatus: FilingStatus
     sessionStartTime: Date | null
+    transactionDetails?: {
+        transactionHash?: string
+        blockNumber?: number
+        gasUsed?: string
+    }
     onPasswordChange: (value: string) => void
     onDownloadReceipt: (type: string) => void
     onEndSession: () => void
@@ -367,9 +373,7 @@ export function Step1PIN({
                     {idSearchStatus === 'not-found' && (
                         <div className="p-4 bg-red-50 border border-red-200 rounded-md">
                             <div className="flex items-center gap-2">
-                                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
+                                <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />
                                 <p className="text-red-700">No matching records found. Please verify your details.</p>
                             </div>
                         </div>
@@ -874,10 +878,11 @@ export function Step4Filing({
     password,
     error,
     filingStatus,
+    sessionStartTime,
+    transactionDetails,
     onPasswordChange,
     onDownloadReceipt,
-    onEndSession,
-    sessionStartTime
+    onEndSession
 }: Step4Props) {
     const [currentStep, setCurrentStep] = useState(0)
     const [isCompleted, setIsCompleted] = useState(false)
@@ -950,68 +955,95 @@ export function Step4Filing({
                             </Badge>
                         ))}
                     </div>
-                    {filingStatus.completed && (
-                        <div className="mt-4 p-2 border rounded-lg">
-                            <h4 className="font-semibold text-sm mb-1">Filing Receipt</h4>
-                            <p className="text-xs text-muted-foreground">
-                                Your nil returns have been successfully filed. Receipt number: NR{Math.random().toString().slice(2, 10)}
+                </div>
+            )}
+            {filingStatus.loggedIn && isCompleted && filingStatus.completed && (
+                <div className="mt-4 p-2 border rounded-lg">
+                    <h4 className="font-semibold text-sm mb-1">Filing Receipt</h4>
+                    <p className="text-xs text-muted-foreground">
+                        Your nil returns have been successfully filed. Receipt number: NR{Math.random().toString().slice(2, 10)}
+                    </p>
+                    {transactionDetails?.transactionHash && (
+                        <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                            <p className="mb-1">
+                                <span className="font-semibold">Transaction Hash: </span>
+                                <a 
+                                    href={`https://testnet.snowtrace.io/tx/${transactionDetails.transactionHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 break-all"
+                                >
+                                    {transactionDetails.transactionHash}
+                                </a>
                             </p>
-                            <div className="flex space-x-2 mt-4">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white flex-1"
-                                    onClick={() => onDownloadReceipt("acknowledgement")}
-                                >
-                                    <ArrowDown className="w-4 h-4 mr-2" />
-                                    Acknowledgement Receipt
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white flex-1"
-                                    onClick={() => onDownloadReceipt("purchase")}
-                                >
-                                    <ArrowDown className="w-4 h-4 mr-2" />
-                                    Purchase Receipt
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white flex-1"
-                                    onClick={() => onDownloadReceipt("all")}
-                                >
-                                    <ArrowDown className="w-4 h-4 mr-2" />
-                                    All Receipts
-                                </Button>
-                            </div>
-                            <div className="mt-4 space-y-4">
-                                {filingStatus.completed && (
-                                    <div className="p-2 bg-green-50 border border-green-100 rounded-lg">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className=" text-sm font-semibold text-green-800">Filing Completed Successfully</p>
-                                                <p className="text-xs text-green-600">
-                                                    Time taken: {Math.round((new Date().getTime() - sessionStartTime.getTime()) / 1000)} seconds
-                                                </p>
-                                            </div>
-                                            <div className="flex justify-end pt-2 border-t border-green-100">
-                                                <Button
-                                                    size="sm"
-                                                    variant="secondary"
-                                                    className="bg-gradient-to-r from-purple-900 to-black hover:from-purple-800 hover:to-black text-white"
-                                                    onClick={onEndSession}
-                                                >
-                                                    End Session
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                )}
-                            </div>
+                            {transactionDetails.blockNumber && (
+                                <p className="mb-1">
+                                    <span className="font-semibold">Block Number: </span>
+                                    {transactionDetails.blockNumber}
+                                </p>
+                            )}
+                            {transactionDetails.gasUsed && (
+                                <p>
+                                    <span className="font-semibold">Gas Used: </span>
+                                    {ethers.formatUnits(transactionDetails.gasUsed, 'gwei')} Gwei
+                                </p>
+                            )}
                         </div>
                     )}
+                    <div className="flex space-x-2 mt-4">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white flex-1"
+                            onClick={() => onDownloadReceipt("acknowledgement")}
+                        >
+                            <ArrowDown className="w-4 h-4 mr-2" />
+                            Acknowledgement Receipt
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white flex-1"
+                            onClick={() => onDownloadReceipt("purchase")}
+                        >
+                            <ArrowDown className="w-4 h-4 mr-2" />
+                            Purchase Receipt
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white flex-1"
+                            onClick={() => onDownloadReceipt("all")}
+                        >
+                            <ArrowDown className="w-4 h-4 mr-2" />
+                            All Receipts
+                        </Button>
+                    </div>
+                    <div className="mt-4 space-y-4">
+                        {filingStatus.completed && (
+                            <div className="p-2 bg-green-50 border border-green-100 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className=" text-sm font-semibold text-green-800">Filing Completed Successfully</p>
+                                        <p className="text-xs text-green-600">
+                                            Time taken: {Math.round((new Date().getTime() - sessionStartTime.getTime()) / 1000)} seconds
+                                        </p>
+                                    </div>
+                                    <div className="flex justify-end pt-2 border-t border-green-100">
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className="bg-gradient-to-r from-purple-900 to-black hover:from-purple-800 hover:to-black text-white"
+                                            onClick={onEndSession}
+                                        >
+                                            End Session
+                                        </Button>
+                                    </div>
+                                </div>
+
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

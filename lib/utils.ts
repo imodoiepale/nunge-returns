@@ -36,3 +36,33 @@ export function getDomainTheme(hostname: string): Theme {
   // Default fallback
   return 'default';
 }
+
+/**
+ * Formats a timestamp into a human-readable date string
+ * @param timestamp Unix timestamp in seconds or milliseconds
+ * @returns Formatted date string
+ */
+export function formatDate(timestamp: number | string): string {
+  // Convert string to number if needed
+  const ts = typeof timestamp === 'string' ? parseInt(timestamp) : timestamp;
+  
+  // Check if timestamp is in seconds (10 digits) and convert to milliseconds if needed
+  const msTimestamp = ts.toString().length === 10 ? ts * 1000 : ts;
+  
+  // Create date object
+  const date = new Date(msTimestamp);
+  
+  // Format options
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  };
+  
+  // Return formatted date
+  return new Intl.DateTimeFormat('en-US', options).format(date);
+}
