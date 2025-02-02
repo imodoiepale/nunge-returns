@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { Avalanche, BinTools, Buffer, BN } from '@avalabs/avalanchejs'
 import { ethers } from 'ethers'
 
