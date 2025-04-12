@@ -7,26 +7,24 @@ import Image from "next/image"
 import { ArrowRight, FileText, Shield, Zap } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from 'react';
-import { supabase  } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
+import AnalyticsService from '@/lib/analyticsService';
 
 export default function Home() {
   const [userCount, setUserCount] = useState<number>(0);
 
   useEffect(() => {
+    const analyticsService = new AnalyticsService();
+    
     const fetchUserCount = async () => {
-      const { count, error } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact' })
-        .eq('status', 'completed')
-        .eq('current_step', '4');
-
-      if (!error && count !== null) {
-        setUserCount(count);
-      }
+      // Get the trusted by count from our analytics service
+      const count = await analyticsService.getTrustedByCount();
+      setUserCount(count);
     };
 
     fetchUserCount();
 
+    // Still listen for realtime updates
     const subscription = supabase
       .channel('public:sessions')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sessions' }, payload => {

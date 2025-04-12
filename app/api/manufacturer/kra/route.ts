@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const API_URL = 'https://primary-production-079f.up.railway.app/webhook/manufucturerDetails';
+const API_URL2 = 'https://primary-production-079f.up.railway.app/webhook/manufucturerDetails';
 
 interface ManufacturerDetails {
   pin: string;

@@ -1,0 +1,170 @@
+{
+    "nodes": [
+      {
+        "parameters": {},
+        "name": "Start",
+        "type": "n8n-nodes-base.start",
+        "typeVersion": 1,
+        "position": [250, 300]
+      },
+      {
+        "parameters": {
+          "path": "paystack-webhook",
+          "responseData": "{{ { \"status\": \"ok\" } }}"
+        },
+        "name": "Paystack Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [450, 300],
+        "webhookId": "your-webhook-id"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "and": [
+              {
+                "value1": "={{$json[\"event\"]}}",
+                "operation": "equal",
+                "value2": "charge.success"
+              },
+              {
+                "value1": "={{$json[\"data\"][\"amount\"]}}",
+                "operation": "equal",
+                "value2": 5000
+              }
+            ]
+          }
+        },
+        "name": "Check Payment Success",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [700, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const crypto = require('crypto');\n\nconst paystackSecret = 'your-paystack-webhook-secret';\nconst computedSignature = crypto\n  .createHmac('sha512', paystackSecret)\n  .update(JSON.stringify($json))\n  .digest('hex');\n\nif (computedSignature !== $headers['x-paystack-signature']) {\n  return [{json: {error: 'Invalid signature'}}];\n}\n\nreturn $input.all();"
+        },
+        "name": "HMAC Validation",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [950, 300]
+      },
+      {
+        "parameters": {
+          "updateFields": {
+            "service_status": "active"
+          },
+          "id": "={{$json[\"data\"][\"metadata\"][\"user_id\"]}}"
+        },
+        "name": "Activate Service",
+        "type": "n8n-nodes-base.crm",
+        "typeVersion": 1,
+        "position": [1200, 300]
+      },
+      {
+        "parameters": {
+          "subject": "Payment Successful",
+          "body": "Dear customer, your payment of 50 KSH for Nunge Returns was successful. Your service is now active.",
+          "to": "={{$json[\"data\"][\"customer\"][\"email\"]}}"
+        },
+        "name": "Send Confirmation Email",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 1,
+        "position": [1450, 300]
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "columns": {
+            "values": [
+              {
+                "column": "transaction_id",
+                "value": "={{$json[\"data\"][\"id\"]}}"
+              },
+              {
+                "column": "amount",
+                "value": "={{$json[\"data\"][\"amount\"]}}"
+              },
+              {
+                "column": "status",
+                "value": "success"
+              }
+            ]
+          }
+        },
+        "name": "Log Transaction",
+        "type": "n8n-nodes-base.spreadsheetFile",
+        "typeVersion": 1,
+        "position": [1700, 300]
+      }
+    ],
+    "connections": {
+      "Start": {
+        "main": [
+          [
+            {
+              "node": "Paystack Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Paystack Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check Payment Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Payment Success": {
+        "main": [
+          [
+            {
+              "node": "HMAC Validation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HMAC Validation": {
+        "main": [
+          [
+            {
+              "node": "Activate Service",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Activate Service": {
+        "main": [
+          [
+            {
+              "node": "Send Confirmation Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Confirmation Email": {
+        "main": [
+          [
+            {
+              "node": "Log Transaction",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+  

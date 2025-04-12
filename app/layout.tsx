@@ -3,20 +3,21 @@ import { headers } from 'next/headers'
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from 'next-themes'
 
-import { SiteHeader } from "@/components/site-header"
-import { SiteFooter } from "@/components/site-footer"
+import { TooltipProviderWrapper } from '@/components/providers/tooltip-provider'
+
+import { AdminLayoutWrapper } from "@/components/admin-layout-wrapper"
 import { getDomainTheme } from '@/lib/utils'
 
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const headersList = headers()
+  const headersList = await headers()
   const hostname = headersList.get('host') || ''
   const theme = getDomainTheme(hostname)
 
@@ -28,11 +29,13 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
         >
-          <div className="relative flex min-h-screen flex-col">
-            <SiteHeader />
-            <main className="flex-1">{children}</main>
-            <SiteFooter />
-          </div>
+          <TooltipProviderWrapper>
+            <div className="relative flex min-h-screen flex-col">
+              <AdminLayoutWrapper>
+                <main className="flex-1">{children}</main>
+              </AdminLayoutWrapper>
+            </div>
+          </TooltipProviderWrapper>
           <Toaster
             toastOptions={{
               className: 'react-hot-toast',
