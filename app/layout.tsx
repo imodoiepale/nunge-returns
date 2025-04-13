@@ -4,7 +4,6 @@ import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from 'next-themes'
 
 import { TooltipProviderWrapper } from '@/components/providers/tooltip-provider'
-
 import { AdminLayoutWrapper } from "@/components/admin-layout-wrapper"
 import { getDomainTheme } from '@/lib/utils'
 
@@ -23,7 +22,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} data-theme={theme}>
+      <body className={inter.className} data-theme={theme} suppressHydrationWarning={true}>
         <ThemeProvider
           attribute="data-theme"
           defaultTheme="system"

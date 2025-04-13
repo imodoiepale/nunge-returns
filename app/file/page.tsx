@@ -1182,8 +1182,8 @@ export default function FilePage() {
     }
 
     const link = document.createElement('a')
-    link.href = '/receipt.pdf'  // Replace with actual receipt URL
-    link.download = `${manufacturerDetails?.name || 'Unknown'}_${type}_receipt.pdf`
+    link.href = `/receipts/${formData.pin.toUpperCase()} - ${type.toUpperCase()} - RECEIPT.PDF`  // Replace with actual receipt URL
+    link.download = `${manufacturerDetails?.name?.toUpperCase() || 'UNKNOWN'} - ${formData.pin.toUpperCase()} - ${type.toUpperCase()}_RECEIPT.PDF`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
