@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import AnalyticsService from '@/lib/analyticsService';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Home() {
   const [userCount, setUserCount] = useState<number>(0);

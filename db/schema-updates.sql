@@ -451,3 +451,38 @@ CREATE INDEX IF NOT EXISTS idx_partners_email ON partners(email);
 CREATE INDEX IF NOT EXISTS idx_partner_transactions_partner_id ON partner_transactions(partner_id);
 CREATE INDEX IF NOT EXISTS idx_user_metrics_metric_date ON user_metrics(metric_date);
 CREATE INDEX IF NOT EXISTS idx_transaction_metrics_metric_date ON transaction_metrics(metric_date);
+
+-- Add Return Documents Table
+CREATE TABLE IF NOT EXISTS return_documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id UUID REFERENCES returns(id),
+    document_type TEXT,
+    document_name TEXT,
+    document_url TEXT,
+    uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+    file_size INTEGER,
+    file_type TEXT,
+    description TEXT,
+    is_verified BOOLEAN DEFAULT false,
+    verified_by TEXT,
+    verified_at TIMESTAMPTZ,
+    metadata JSONB
+);
+
+-- Add Return History Table for tracking document and return changes
+CREATE TABLE IF NOT EXISTS return_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id UUID REFERENCES returns(id),
+    action TEXT,
+    description TEXT,
+    performed_by_email TEXT,
+    performed_by_name TEXT,
+    performed_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB
+);
+
+-- Create indexes for document tables
+CREATE INDEX IF NOT EXISTS idx_return_documents_return_id ON return_documents(return_id);
+CREATE INDEX IF NOT EXISTS idx_return_documents_document_type ON return_documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_return_history_return_id ON return_history(return_id);
+CREATE INDEX IF NOT EXISTS idx_return_history_action ON return_history(action);

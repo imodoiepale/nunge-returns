@@ -33,7 +33,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "src/sessionManagementService.js"
+    "src/sessionManagementService.ts"
   ],
   "exclude": [
     "node_modules"

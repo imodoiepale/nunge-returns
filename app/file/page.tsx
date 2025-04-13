@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils"
 import SessionManagementService from "@/src/sessionManagementService"
 import { supabase } from '@/lib/supabaseClient'
+import { handleSubmit as submitHelper, endSession as endSessionHelper, fetchManufacturerDetails } from './lib/sessionHelpers'
 
 const sessionService = new SessionManagementService()
 
@@ -65,36 +66,72 @@ export default function FilePage() {
   // Fetch user count
   useEffect(() => {
     const fetchUserCount = async () => {
-      const { count } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact' })
-        .eq('status', 'completed')
-        .eq('current_step', '4');
+      try {
+        const { count, error } = await supabase
+          .from('sessions')
+          .select('*', { count: 'exact' })
+          .eq('status', 'completed')
+          .eq('current_step', '4');
 
-      setUserCount(count === 0 ? 1 : count + 1)
+        if (error) {
+          console.error('[DB ERROR] Error fetching user count:', error);
+          return;
+        }
+
+        setUserCount(count === 0 ? 1 : count + 1);
+        console.log('[DB] User count fetched:', count);
+      } catch (countError) {
+        console.error('[DB ERROR] Exception fetching user count:', countError);
+      }
     }
 
-    fetchUserCount()
+    fetchUserCount();
 
+    // Set up real-time subscription for user count updates
     const subscription = supabase
       .channel('public:sessions')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'sessions' },
-        () => fetchUserCount()
+        (payload) => {
+          console.log('[DB SUBSCRIPTION] Session change detected:', payload);
+          fetchUserCount();
+        }
       )
-      .subscribe()
+      .subscribe();
+
+    console.log('[DB] Subscribed to session changes');
 
     return () => {
-      supabase.removeChannel(subscription)
+      supabase.removeChannel(subscription);
+      console.log('[DB] Unsubscribed from session changes');
     }
-  }, [])
+  }, []);
 
+  // Initialize session on component mount
   useEffect(() => {
     const initializeSession = async () => {
       try {
-        await sessionService.createProspectSession();
+        console.log('[APP] Initializing prospect session...');
+        const sessionId = await sessionService.createProspectSession();
+        console.log('[APP] Prospect session created with ID:', sessionId);
+
+        // Record page view in analytics
+        await supabase
+          .from('session_activities')
+          .insert([{
+            session_id: sessionId,
+            activity_type: 'user_action',
+            description: 'Viewed filing page',
+            metadata: {
+              page: 'file',
+              url: window.location.href,
+              referrer: document.referrer
+            }
+          }]);
+
+        console.log('[DB] Recorded page view in database');
       } catch (error) {
-        console.error('Error creating prospect session:', error);
+        console.error('[APP ERROR] Error creating prospect session:', error);
       }
     };
 
@@ -106,8 +143,31 @@ export default function FilePage() {
     let timer: NodeJS.Timeout;
 
     if (step >= 2 && !sessionStartTime && !filingStatus.completed) {
-      setSessionStartTime(new Date());
+      const newSessionStartTime = new Date();
+      setSessionStartTime(newSessionStartTime);
       setSessionTime(300); // 5 minutes
+
+      // Record session timer start in database
+      const currentSessionId = sessionService.getData('currentSessionId');
+      if (currentSessionId) {
+        try {
+          supabase
+            .from('session_activities')
+            .insert([{
+              session_id: currentSessionId,
+              activity_type: 'user_action',
+              description: 'Session timer started',
+              metadata: {
+                session_start_time: newSessionStartTime.toISOString(),
+                timeout_duration: 300
+              }
+            }])
+            .then(() => console.log('[DB] Recorded session timer start'))
+            .catch(error => console.error('[DB ERROR] Failed to record session timer start:', error));
+        } catch (dbError) {
+          console.error('[DB ERROR] Error preparing session timer record:', dbError);
+        }
+      }
     }
 
     if (sessionStartTime && step >= 2 && !filingStatus.completed) {
@@ -116,14 +176,75 @@ export default function FilePage() {
           if (prev <= 0) {
             setShowTimeoutDialog(true);
             clearInterval(timer);
+
+            // Record session timeout in database
+            const currentSessionId = sessionService.getData('currentSessionId');
+            if (currentSessionId) {
+              try {
+                supabase
+                  .from('session_activities')
+                  .insert([{
+                    session_id: currentSessionId,
+                    activity_type: 'session_error',
+                    description: 'Session timed out',
+                    metadata: {
+                      session_start_time: sessionStartTime.toISOString(),
+                      session_end_time: new Date().toISOString(),
+                      reason: 'timeout'
+                    }
+                  }])
+                  .then(() => console.log('[DB] Recorded session timeout'))
+                  .catch(error => console.error('[DB ERROR] Failed to record session timeout:', error));
+
+                // Update session status
+                supabase
+                  .from('sessions')
+                  .update({
+                    status: 'abandoned',
+                    last_activity: new Date().toISOString(),
+                    form_data: {
+                      ...formData,
+                      session_abandoned_reason: 'timeout'
+                    }
+                  })
+                  .eq('id', currentSessionId)
+                  .then(() => console.log('[DB] Updated session to abandoned status'))
+                  .catch(error => console.error('[DB ERROR] Failed to update session status:', error));
+              } catch (dbError) {
+                console.error('[DB ERROR] Error recording session timeout:', dbError);
+              }
+            }
+
             return 0;
           }
           return prev - 1;
         });
 
         // Show warning when 1 minute remaining
-        if (sessionTime <= 60) {
+        if (sessionTime <= 60 && !showWarning) {
           setShowWarning(true);
+
+          // Record warning shown in database
+          const currentSessionId = sessionService.getData('currentSessionId');
+          if (currentSessionId) {
+            try {
+              supabase
+                .from('session_activities')
+                .insert([{
+                  session_id: currentSessionId,
+                  activity_type: 'user_action',
+                  description: 'Session timeout warning shown',
+                  metadata: {
+                    remaining_time: sessionTime,
+                    session_start_time: sessionStartTime.toISOString()
+                  }
+                }])
+                .then(() => console.log('[DB] Recorded timeout warning'))
+                .catch(error => console.error('[DB ERROR] Failed to record timeout warning:', error));
+            } catch (dbError) {
+              console.error('[DB ERROR] Error recording timeout warning:', dbError);
+            }
+          }
         }
       }, 1000);
     }
@@ -131,28 +252,135 @@ export default function FilePage() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [sessionStartTime, step, filingStatus.completed]);
+  }, [sessionStartTime, step, filingStatus.completed, showWarning, sessionTime, formData]);
 
   const handlePINChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPin = e.target.value.toUpperCase();
     setFormData(prev => ({ ...prev, pin: newPin }));
-    
+
     if (newPin.length === 11) {
       setPinValidationStatus("checking");
+
+      // Record PIN validation attempt in database
+      const currentSessionId = sessionService.getData('currentSessionId');
+      if (currentSessionId) {
+        try {
+          await supabase
+            .from('session_activities')
+            .insert([{
+              session_id: currentSessionId,
+              activity_type: 'user_action',
+              description: 'PIN validation attempted',
+              metadata: {
+                pin: newPin
+              }
+            }]);
+
+          console.log('[DB] Recorded PIN validation attempt');
+        } catch (dbError) {
+          console.error('[DB ERROR] Failed to record PIN validation attempt:', dbError);
+        }
+      }
+
       try {
         const response = await fetch(`/api/manufacturer/kra?pin=${encodeURIComponent(newPin)}`, {
           method: 'GET'
         });
         const data = await response.json();
-        
+
         if (data.success) {
           setPinValidationStatus("valid");
           setManufacturerDetails(data.data);
+
+          // Record successful validation in database
+          if (currentSessionId) {
+            try {
+              await supabase
+                .from('session_activities')
+                .insert([{
+                  session_id: currentSessionId,
+                  activity_type: 'pin_validated',
+                  description: 'PIN validated successfully',
+                  metadata: {
+                    pin: newPin,
+                    taxpayer_name: data.data.name
+                  }
+                }]);
+
+              console.log('[DB] Recorded successful PIN validation');
+
+              // Update session with PIN and manufacturer details
+              await supabase
+                .from('sessions')
+                .update({
+                  pin: newPin,
+                  name: data.data.name,
+                  email: data.data.contactDetails?.email,
+                  form_data: {
+                    ...formData,
+                    pin: newPin,
+                    manufacturerName: data.data.name,
+                    email: data.data.contactDetails?.email,
+                    mobileNumber: data.data.contactDetails?.mobile,
+                    authentication_method: 'pin'
+                  },
+                  last_activity: new Date().toISOString()
+                })
+                .eq('id', currentSessionId);
+
+              console.log('[DB] Updated session with PIN and manufacturer details');
+            } catch (dbError) {
+              console.error('[DB ERROR] Failed to record successful PIN validation:', dbError);
+            }
+          }
         } else {
           setPinValidationStatus("invalid");
+
+          // Record failed validation in database
+          if (currentSessionId) {
+            try {
+              await supabase
+                .from('session_activities')
+                .insert([{
+                  session_id: currentSessionId,
+                  activity_type: 'user_action',
+                  description: 'PIN validation failed',
+                  metadata: {
+                    pin: newPin,
+                    reason: data.error || 'Invalid PIN'
+                  }
+                }]);
+
+              console.log('[DB] Recorded failed PIN validation');
+            } catch (dbError) {
+              console.error('[DB ERROR] Failed to record failed PIN validation:', dbError);
+            }
+          }
         }
       } catch (error) {
         setPinValidationStatus("invalid");
+
+        // Record error in database
+        const currentSessionId = sessionService.getData('currentSessionId');
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'PIN validation error',
+                metadata: {
+                  pin: newPin,
+                  error: error.message
+                }
+              }]);
+
+            console.log('[DB] Recorded PIN validation error');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record PIN validation error:', dbError);
+          }
+        }
       }
     } else {
       setPinValidationStatus("idle");
@@ -162,7 +390,7 @@ export default function FilePage() {
   const handlePasswordChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPassword = e.target.value;
     setFormData(prev => ({ ...prev, password: newPassword }));
-    
+
     // Reset validation if password is empty
     if (!newPassword) {
       setPasswordValidationStatus("idle");
@@ -173,6 +401,28 @@ export default function FilePage() {
     // Only validate if we have a valid PIN
     if (formData.pin && pinValidationStatus === "valid") {
       setPasswordValidationStatus("checking");
+
+      // Record password validation attempt in database
+      const currentSessionId = sessionService.getData('currentSessionId');
+      if (currentSessionId) {
+        try {
+          await supabase
+            .from('session_activities')
+            .insert([{
+              session_id: currentSessionId,
+              activity_type: 'user_action',
+              description: 'Password validation attempted',
+              metadata: {
+                pin: formData.pin
+              }
+            }]);
+
+          console.log('[DB] Recorded password validation attempt');
+        } catch (dbError) {
+          console.error('[DB ERROR] Failed to record password validation attempt:', dbError);
+        }
+      }
+
       try {
         const response = await fetch('/api/validate-password', {
           method: 'POST',
@@ -187,13 +437,91 @@ export default function FilePage() {
         if (data.success) {
           setPasswordValidationStatus("valid");
           setPasswordError(null);
+
+          // Record successful validation in database
+          if (currentSessionId) {
+            try {
+              await supabase
+                .from('session_activities')
+                .insert([{
+                  session_id: currentSessionId,
+                  activity_type: 'user_action',
+                  description: 'Password validated successfully',
+                  metadata: {
+                    pin: formData.pin
+                  }
+                }]);
+
+              console.log('[DB] Recorded successful password validation');
+
+              // Update session with password validation
+              await supabase
+                .from('sessions')
+                .update({
+                  form_data: {
+                    ...formData,
+                    password: newPassword,
+                    passwordValidated: true
+                  },
+                  last_activity: new Date().toISOString()
+                })
+                .eq('id', currentSessionId);
+
+              console.log('[DB] Updated session with password validation');
+            } catch (dbError) {
+              console.error('[DB ERROR] Failed to record successful password validation:', dbError);
+            }
+          }
         } else {
           setPasswordValidationStatus("invalid");
           setPasswordError(data.message || "Invalid password");
+
+          // Record failed validation in database
+          if (currentSessionId) {
+            try {
+              await supabase
+                .from('session_activities')
+                .insert([{
+                  session_id: currentSessionId,
+                  activity_type: 'user_action',
+                  description: 'Password validation failed',
+                  metadata: {
+                    pin: formData.pin,
+                    reason: data.message || "Invalid password"
+                  }
+                }]);
+
+              console.log('[DB] Recorded failed password validation');
+            } catch (dbError) {
+              console.error('[DB ERROR] Failed to record failed password validation:', dbError);
+            }
+          }
         }
       } catch (error) {
         setPasswordValidationStatus("invalid");
         setPasswordError("Error validating password");
+
+        // Record error in database
+        const currentSessionId = sessionService.getData('currentSessionId');
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'Password validation error',
+                metadata: {
+                  pin: formData.pin,
+                  error: error.message
+                }
+              }]);
+
+            console.log('[DB] Recorded password validation error');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record password validation error:', dbError);
+          }
+        }
       }
     }
   };
@@ -203,83 +531,43 @@ export default function FilePage() {
     // Reset validation states when switching tabs
     setPasswordValidationStatus("idle");
     setPasswordError(null);
-  };
 
-  const validatePassword = async (pin: string, password: string) => {
-    setPasswordValidationStatus("checking");
-    try {
-      const response = await fetch('/api/validate-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ pin, password }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setPasswordValidationStatus("valid");
-        setPasswordError(null);
-        
-        // Only fetch manufacturer details if we don't already have them
-        if (!manufacturerDetails) {
-          setLoading(true);
-          try {
-            const id = formData.manufacturerName;
-            const name = formData.manufacturerName;
-            const pin = formData.pin;
-            
-            let response;
-            if (id && name) {
-              // Use BRS endpoint with GET request
-              response = await fetch(
-                `/api/manufacturer/brs?id=${encodeURIComponent(id)}&firstName=${encodeURIComponent(name)}`,
-                { method: 'GET' }
-              );
-            } else {
-              // Use KRA endpoint with GET request
-              response = await fetch(
-                `/api/manufacturer/kra?pin=${encodeURIComponent(pin)}`,
-                { method: 'GET' }
-              );
+    // Record tab change in database
+    const currentSessionId = sessionService.getData('currentSessionId');
+    if (currentSessionId) {
+      try {
+        supabase
+          .from('session_activities')
+          .insert([{
+            session_id: currentSessionId,
+            activity_type: 'user_action',
+            description: `Tab changed to ${tab}`,
+            metadata: {
+              previous_tab: formData.activeTab,
+              new_tab: tab
             }
-            
-            const detailsData = await response.json();
-            
-            if (detailsData.success) {
-              setManufacturerDetails(detailsData.data);
-            } else {
-              setError(detailsData.error || "Failed to fetch manufacturer details");
-            }
-          } catch (error) {
-            setError("Error fetching manufacturer details");
-          } finally {
-            setLoading(false);
-          }
-        }
-      } else {
-        setPasswordValidationStatus("invalid");
-        setPasswordError(data.message || "Invalid password");
+          }])
+          .then(() => console.log('[DB] Recorded tab change'))
+          .catch(error => console.error('[DB ERROR] Failed to record tab change:', error));
+      } catch (dbError) {
+        console.error('[DB ERROR] Error recording tab change:', dbError);
       }
-    } catch (error) {
-      setPasswordValidationStatus("invalid");
-      setPasswordError("Error validating password");
     }
   };
 
   const handlePINChangeWrapper = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPin = e.target.value.toUpperCase();
+    console.log('[APP] PIN changed:', newPin);
 
     // Basic form update
     setFormData(prev => ({
-        ...prev,
-        pin: newPin,
-        password: '', // Clear password when PIN changes
-        manufacturerName: '', // Clear manufacturer name
-        email: '', // Clear email
-        mobileNumber: '', // Clear mpesa number
-        mpesaNumber: '' // Clear mpesa number
+      ...prev,
+      pin: newPin,
+      password: '', // Clear password when PIN changes
+      manufacturerName: '', // Clear manufacturer name
+      email: '', // Clear email
+      mobileNumber: '', // Clear mpesa number
+      mpesaNumber: '' // Clear mpesa number
     }));
 
     // Reset all states
@@ -290,140 +578,156 @@ export default function FilePage() {
     setStep(1);
     setPaymentStatus("Not Paid");
     setFilingStatus({
-        loggedIn: false,
-        filing: false,
-        extracting: false,
-        completed: false
+      loggedIn: false,
+      filing: false,
+      extracting: false,
+      completed: false,
     });
 
     // Format validation first
     const validation = validatePIN(newPin);
     if (!validation.isValid) {
-        setError(validation.error);
-        setPinValidationStatus("invalid");
-        return;
+      console.log('[APP] Invalid PIN format:', validation.error);
+      setError(validation.error);
+      setPinValidationStatus("invalid");
+      return;
     }
 
     // Only proceed if PIN is complete
     if (newPin.length === 11) {
-        setPinValidationStatus("checking");
-        setLoading(true);
+      console.log('[APP] PIN complete, checking...');
+      setPinValidationStatus("checking");
+      setLoading(true);
 
-        try {
-            // 1. First check for existing sessions
-            const existingSession = await sessionService.handlePinChange(newPin);
+      try {
+        // 1. First check for existing sessions
+        console.log('[APP] Checking for existing sessions with PIN:', newPin);
+        const existingSession = await sessionService.handlePinChange(newPin);
 
-            if (existingSession) {
-                // Store current state and show dialog
-                setExistingSessionData({
-                    ...existingSession,
-                    previousState: {
-                        formData: { ...formData },
-                        manufacturerDetails,
-                        step,
-                        passwordValidationStatus,
-                        passwordError,
-                        paymentStatus,
-                        filingStatus
-                    },
-                    originalPin: newPin,
-                    manufacturerName: existingSession.form_data?.manufacturerName || 'Unknown'
-                });
-                setShowDialog(true);
-                setPinValidationStatus("idle");
-                return;
-            }
-
-            // 2. If no existing session, validate PIN against KRA
-            const details = await extractManufacturerDetails(newPin);
-            
-            if (!details || !details.taxpayerName) {
-                setError('PIN NOT FOUND!');
-                setManufacturerDetails(null);
-                setPinValidationStatus("invalid");
-                return;
-            }
-
-            // 3. Update current session with new PIN and details
-            const currentSessionId = sessionService.getData('currentSessionId');
-            if (currentSessionId) {
-              await sessionService.updateSession(currentSessionId, {
-                pin: newPin,
-                form_data: {
-                  ...formData,
-                  pin: newPin,
-                  password: '',
-                  manufacturerName: details.taxpayerName,
-                  email: details.mainEmailId,
-                  mobileNumber: details.mobileNumber,
-                  manufacturerDetails: details
-                }
-              });
-
-              // Update form data with fetched details
-              setFormData(prev => ({
-                ...prev,
-                manufacturerName: details.taxpayerName,
-                email: details.mainEmailId,
-                mobileNumber: details.mobileNumber
-              }));
-
-              // Set manufacturer details in state
-              setManufacturerDetails({
-                pin: newPin,
-                name: details.taxpayerName,
-                contactDetails: {
-                  mobile: details.mobileNumber,
-                  email: details.mainEmailId,
-                  secondaryEmail: details.mainEmailId
-                },
-                businessDetails: {
-                  name: details.taxpayerName,
-                  registrationNumber: details.businessRegCertiNo || '',
-                  registrationDate: details.busiRegDt || '',
-                  commencedDate: details.busiCommencedDt || ''
-                },
-                postalAddress: {
-                  postalCode: details.postalAddress?.postalCode || '',
-                  town: details.postalAddress?.town || '',
-                  poBox: details.postalAddress?.poBox || ''
-                },
-                physicalAddress: {
-                  descriptive: details.descriptiveAddress || ''
-                }
-              });
-            }
-
-            setPinValidationStatus("valid");
-            setError(null);
-            
-        } catch (error) {
-            console.error('Error:', error);
-            setError('Failed to verify PIN. Please try again.');
-            setManufacturerDetails(null);
-            setPinValidationStatus("invalid");
-            
-            // Attempt to mark session as error
-            const currentSessionId = sessionService.getData('currentSessionId');
-            if (currentSessionId) {
-                try {
-                    await sessionService.updateSession(currentSessionId, {
-                        status: 'error',
-                        error_message: error.message || 'Failed to verify PIN'
-                    });
-                } catch (sessionError) {
-                    console.error('Error updating session status:', sessionError);
-                }
-            }
-        } finally {
-            setLoading(false);
+        if (existingSession) {
+          console.log('[APP] Existing session found:', existingSession);
+          // Store current state and show dialog
+          setExistingSessionData({
+            ...existingSession,
+            previousState: {
+              formData: { ...formData },
+              manufacturerDetails,
+              step,
+              passwordValidationStatus,
+              passwordError,
+              paymentStatus,
+              filingStatus
+            },
+            originalPin: newPin,
+            manufacturerName: existingSession.form_data?.manufacturerName || 'Unknown'
+          });
+          setShowDialog(true);
+          setPinValidationStatus("idle");
+          return;
         }
-    } else {
-        // Reset validation if PIN is incomplete
-        setPinValidationStatus("idle");
+
+        // 2. If no existing session, validate PIN against KRA
+        console.log('[APP] No existing session, fetching manufacturer details for PIN:', newPin);
+        const details = await extractManufacturerDetails(newPin);
+        console.log('[APP] Manufacturer details:', details);
+
+        if (!details || !details.taxpayerName) {
+          console.log('[APP ERROR] PIN not found');
+          setError('PIN NOT FOUND!');
+          setManufacturerDetails(null);
+          setPinValidationStatus("invalid");
+          return;
+        }
+
+        // 3. Update current session with new PIN and details
+        const currentSessionId = sessionService.getData('currentSessionId');
+        console.log('[APP] Updating session with PIN details, session ID:', currentSessionId);
+
+        if (currentSessionId) {
+          console.log('[APP] Updating session in database...');
+          const updateResult = await sessionService.updateSession(currentSessionId, {
+            pin: newPin,
+            form_data: {
+              ...formData,
+              pin: newPin,
+              password: '',
+              manufacturerName: details.taxpayerName,
+              email: details.mainEmailId,
+              mobileNumber: details.mobileNumber,
+              manufacturerDetails: details
+            }
+          });
+          console.log('[APP] Session update result:', updateResult);
+
+          // Update form data with fetched details
+          console.log('[APP] Updating form data with manufacturer details');
+          setFormData(prev => ({
+            ...prev,
+            manufacturerName: details.taxpayerName,
+            email: details.mainEmailId,
+            mobileNumber: details.mobileNumber
+          }));
+
+          // Set manufacturer details in state
+          const manufacturerDetailsObj = {
+            pin: newPin,
+            name: details.taxpayerName,
+            contactDetails: {
+              mobile: details.mobileNumber,
+              email: details.mainEmailId,
+              secondaryEmail: details.mainEmailId
+            },
+            businessDetails: {
+              name: details.taxpayerName,
+              registrationNumber: details.businessRegCertiNo || '',
+              registrationDate: details.busiRegDt || '',
+              commencedDate: details.busiCommencedDt || ''
+            },
+            postalAddress: {
+              postalCode: details.postalAddress?.postalCode || '',
+              town: details.postalAddress?.town || '',
+              poBox: details.postalAddress?.poBox || ''
+            },
+            physicalAddress: {
+              descriptive: details.descriptiveAddress || ''
+            }
+          };
+          console.log('[APP] Setting manufacturer details:', manufacturerDetailsObj);
+          setManufacturerDetails(manufacturerDetailsObj);
+        }
+
+        console.log('[APP] PIN validation successful');
+        setPinValidationStatus("valid");
+        setError(null);
+
+      } catch (error) {
+        console.error('[APP ERROR] Error processing PIN:', error);
+        setError('Failed to verify PIN. Please try again.');
         setManufacturerDetails(null);
+        setPinValidationStatus("invalid");
+
+        // Attempt to mark session as error
+        const currentSessionId = sessionService.getData('currentSessionId');
+        if (currentSessionId) {
+          try {
+            console.log('[APP] Marking session as error');
+            await sessionService.updateSession(currentSessionId, {
+              status: 'error',
+              error_message: error.message || 'Failed to verify PIN'
+            });
+          } catch (sessionError) {
+            console.error('[APP ERROR] Error updating session status:', sessionError);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Reset validation if PIN is incomplete
+      setPinValidationStatus("idle");
+      setManufacturerDetails(null);
     }
-};
+  };
 
   // Corresponding handleDialogAction function for PIN change confirmation
   const handleDialogAction = async (action: 'proceed' | 'cancel') => {
@@ -535,75 +839,348 @@ export default function FilePage() {
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+    console.log('[APP] Form submitted for step:', step);
+    console.log('[APP] Form data:', formData);
 
-    if (step === 1) {
-      const isPasswordValid = await validatePassword(
-        formData.pin,
-        formData.password,
-        setPasswordValidationStatus,
-        setPasswordError
-      )
-      if (!isPasswordValid) return
-      setStep(2)
-    }
+    // Use the session helper to handle form submission
+    await submitHelper(
+      e,
+      formData,
+      step,
+      setError,
+      setFilingStatus,
+      setStep
+    );
 
-    if (step === 4) {
-      setFilingStatus(prev => ({ ...prev, loggedIn: true }))
-
-      try {
-        const result = await fileNilReturn({
-          pin: formData.pin,
-          password: formData.password
-        })
-
-        if (result.status === "success") {
-          setFilingStatus({
-            loggedIn: true,
-            filing: true,
-            extracting: true,
-            completed: true
-          })
-        } else {
-          throw new Error(result.message)
-        }
-      } catch (error) {
-        setError('Failed to complete filing process')
-      }
-    }
+    console.log('[APP] Form submission processed');
   }
 
 
   // Handle password reset
   const handlePasswordReset = async () => {
-    const success = await resetPassword(formData.pin)
-    if (success) {
-      alert("Password reset instructions have been sent to your registered mobile number.")
-    } else {
-      alert("Failed to initiate password reset. Please try again.")
+    try {
+      // Record password reset attempt in database
+      const currentSessionId = sessionService.getData('currentSessionId');
+      if (currentSessionId) {
+        try {
+          await supabase
+            .from('session_activities')
+            .insert([{
+              session_id: currentSessionId,
+              activity_type: 'user_action',
+              description: 'Password reset requested',
+              metadata: {
+                pin: formData.pin
+              }
+            }]);
+
+          console.log('[DB] Recorded password reset request');
+        } catch (dbError) {
+          console.error('[DB ERROR] Failed to record password reset request:', dbError);
+        }
+      }
+
+      const success = await resetPassword(formData.pin);
+
+      if (success) {
+        alert("Password reset instructions have been sent to your registered mobile number.");
+
+        // Record successful reset request in database
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'Password reset initiated successfully',
+                metadata: {
+                  pin: formData.pin
+                }
+              }]);
+
+            console.log('[DB] Recorded successful password reset initiation');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record successful password reset initiation:', dbError);
+          }
+        }
+      } else {
+        alert("Failed to initiate password reset. Please try again.");
+
+        // Record failed reset request in database
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'Password reset initiation failed',
+                metadata: {
+                  pin: formData.pin
+                }
+              }]);
+
+            console.log('[DB] Recorded failed password reset initiation');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record failed password reset initiation:', dbError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error during password reset:', error);
+      alert("An error occurred during password reset. Please try again.");
+
+      // Record error in database
+      const currentSessionId = sessionService.getData('currentSessionId');
+      if (currentSessionId) {
+        try {
+          await supabase
+            .from('session_activities')
+            .insert([{
+              session_id: currentSessionId,
+              activity_type: 'user_action',
+              description: 'Password reset error',
+              metadata: {
+                pin: formData.pin,
+                error: error.message
+              }
+            }]);
+
+          console.log('[DB] Recorded password reset error');
+        } catch (dbError) {
+          console.error('[DB ERROR] Failed to record password reset error:', dbError);
+        }
+      }
     }
   }
 
   // Handle password and email reset
   const handlePasswordEmailReset = async () => {
-    const success = await resetPasswordAndEmail(formData.pin)
-    if (success) {
-      alert("Password and email reset instructions have been sent to your registered mobile number.")
-    } else {
-      alert("Failed to initiate reset. Please try again.")
+    try {
+      // Record password+email reset attempt in database
+      const currentSessionId = sessionService.getData('currentSessionId');
+      if (currentSessionId) {
+        try {
+          await supabase
+            .from('session_activities')
+            .insert([{
+              session_id: currentSessionId,
+              activity_type: 'user_action',
+              description: 'Password and email reset requested',
+              metadata: {
+                pin: formData.pin
+              }
+            }]);
+
+          console.log('[DB] Recorded password and email reset request');
+        } catch (dbError) {
+          console.error('[DB ERROR] Failed to record password and email reset request:', dbError);
+        }
+      }
+
+      const success = await resetPasswordAndEmail(formData.pin);
+
+      if (success) {
+        alert("Password and email reset instructions have been sent to your registered mobile number.");
+
+        // Record successful reset request in database
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'Password and email reset initiated successfully',
+                metadata: {
+                  pin: formData.pin
+                }
+              }]);
+
+            console.log('[DB] Recorded successful password and email reset initiation');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record successful password and email reset initiation:', dbError);
+          }
+        }
+      } else {
+        alert("Failed to initiate reset. Please try again.");
+
+        // Record failed reset request in database
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'Password and email reset initiation failed',
+                metadata: {
+                  pin: formData.pin
+                }
+              }]);
+
+            console.log('[DB] Recorded failed password and email reset initiation');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record failed password and email reset initiation:', dbError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error during password and email reset:', error);
+      alert("An error occurred during reset. Please try again.");
+
+      // Record error in database
+      const currentSessionId = sessionService.getData('currentSessionId');
+      if (currentSessionId) {
+        try {
+          await supabase
+            .from('session_activities')
+            .insert([{
+              session_id: currentSessionId,
+              activity_type: 'user_action',
+              description: 'Password and email reset error',
+              metadata: {
+                pin: formData.pin,
+                error: error.message
+              }
+            }]);
+
+          console.log('[DB] Recorded password and email reset error');
+        } catch (dbError) {
+          console.error('[DB ERROR] Failed to record password and email reset error:', dbError);
+        }
+      }
     }
   }
 
   // Simulate payment
   const simulatePayment = () => {
-    setPaymentStatus("Processing")
+    console.log('[APP] Simulating payment...');
+    setPaymentStatus("Processing");
+
+    // Update the session with payment information
+    const currentSessionId = sessionService.getData('currentSessionId');
+    if (currentSessionId) {
+      console.log('[APP] Updating session with payment information');
+      supabase
+        .from('sessions')
+        .update({
+          form_data: {
+            ...formData,
+            paymentStatus: 'Processing',
+            paymentStarted: new Date().toISOString()
+          }
+        })
+        .eq('id', currentSessionId)
+        .then(result => {
+          console.log('[APP] Session payment update result:', result);
+        })
+        .catch(error => {
+          console.error('[APP ERROR] Failed to update session with payment info:', error);
+        });
+
+      // Create a transaction record
+      console.log('[APP] Creating transaction record for payment');
+      supabase
+        .from('transactions')
+        .insert([
+          {
+            session_id: currentSessionId,
+            email: formData.email || null,
+            name: formData.manufacturerName || null,
+            transaction_type: 'filing_fee',
+            amount: 50, // Example filing fee amount
+            status: 'pending', // CHANGED to a valid status
+            reference_number: `FIL-${Date.now()}`,
+            description: 'Tax return filing fee',
+            phone_number: formData.mpesaNumber || '254000000000', // ADDED required field
+            metadata: {
+              pin: formData.pin,
+              mpesaNumber: formData.mpesaNumber
+            }
+          }])
+        .then(result => {
+          console.log('[APP] Transaction record created:', result);
+        })
+        .catch(error => {
+          console.error('[APP ERROR] Failed to create transaction record:', error);
+        });
+    }
+
     setTimeout(() => {
-      setPaymentStatus("Paid")
-    }, 2000)
+      console.log('[APP] Payment completed');
+      setPaymentStatus("Paid");
+
+      // Update the session with completed payment
+      if (currentSessionId) {
+        console.log('[APP] Updating session with completed payment');
+        supabase
+          .from('sessions')
+          .update({
+            form_data: {
+              ...formData,
+              paymentStatus: 'Paid',
+              paymentCompleted: new Date().toISOString()
+            }
+          })
+          .eq('id', currentSessionId)
+          .then(result => {
+            console.log('[APP] Session payment completion result:', result);
+          })
+          .catch(error => {
+            console.error('[APP ERROR] Failed to update session with completed payment:', error);
+          });
+
+        // Update transaction record
+        console.log('[APP] Updating transaction record for completed payment');
+        supabase
+          .from('transactions')
+          .update({
+            status: 'completed', // This is valid
+            transaction_code: status.transaction_code,
+            updated_at: new Date().toISOString(),
+            metadata: {
+              transaction_code: status.transaction_code,
+              pin_number: formData.pin // Corrected variable reference
+            }
+          })
+          .eq('session_id', currentSessionId)
+          .eq('transaction_type', 'filing_fee')
+          .then(result => {
+            console.log('[APP] Transaction record updated:', result);
+          })
+          .catch(error => {
+            console.error('[APP ERROR] Failed to update transaction record:', error);
+          });
+      }
+    }, 2000);
   }
 
   // Handle receipt download
   const downloadReceipt = (type: string) => {
+    // Record download in database
+    const currentSessionId = sessionService.getData('currentSessionId');
+    if (currentSessionId) {
+      try {
+        supabase
+          .from('session_activities')
+          .insert([{
+            session_id: currentSessionId,
+            activity_type: 'document_uploaded',
+            description: `Downloaded ${type} receipt`,
+            metadata: {
+              receipt_type: type,
+              pin: formData.pin
+            }
+          }])
+          .then(() => console.log(`[DB] Recorded ${type} receipt download`))
+          .catch(error => console.error(`[DB ERROR] Failed to record ${type} receipt download:`, error));
+      } catch (dbError) {
+        console.error('[DB ERROR] Error recording receipt download:', dbError);
+      }
+    }
+
     const link = document.createElement('a')
     link.href = '/receipt.pdf'  // Replace with actual receipt URL
     link.download = `${manufacturerDetails?.name || 'Unknown'}_${type}_receipt.pdf`
@@ -620,18 +1197,18 @@ export default function FilePage() {
 
   // Handle session end
   const endSession = async () => {
-    const currentSessionId = sessionService.getData('currentSessionId');
+    console.log('[APP] Ending session...');
 
-    if (currentSessionId) {
-      await supabase
-        .from('sessions')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', currentSessionId);
-    }
+    // Use the session helper to handle session ending
+    await endSessionHelper(formData, {
+      push: (path) => {
+        console.log('[APP] Redirecting to:', path);
+        window.location.href = path;
+      }
+    });
 
-    sessionService.clearAllData();
     setShowTimeoutDialog(false);
-    window.location.href = '/file';
+    console.log('[APP] Session ended');
   }
 
   const renderStepButtons = () => {
@@ -707,13 +1284,13 @@ export default function FilePage() {
     <div className="flex min-h-screen flex-col items-center py-4 md:py-8 px-4">
       {/* Back Link */}
       <Link
-        href="/"
+        href="/file"
         className="absolute left-4 top-4 flex items-center text-sm font-medium text-muted-foreground"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back
       </Link>
-  
+
       {/* User Counter */}
       <div className="text-center mb-4 mt-12 md:mt-0">
         <p className="text-base md:text-lg font-semibold">
@@ -723,7 +1300,7 @@ export default function FilePage() {
           Thank you for using our service!
         </p>
       </div>
-  
+
       {/* Main Card */}
       <Card className={cn(
         "w-full max-w-6xl relative",
@@ -746,12 +1323,12 @@ export default function FilePage() {
               </div>
             </div>
           )}
-  
+
           <CardTitle className="text-xl md:text-2xl">File Your Returns</CardTitle>
           <CardDescription>
             Step {step} of 4: {steps[step - 1]}
           </CardDescription>
-  
+
           {/* Progress Steps */}
           <div className="flex justify-between mt-4 px-2">
             {steps.map((s, index) => (
@@ -764,7 +1341,7 @@ export default function FilePage() {
             ))}
           </div>
         </CardHeader>
-  
+
         <CardContent>
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
             {/* Filled Details Section */}
@@ -780,7 +1357,7 @@ export default function FilePage() {
                           {formData.pin}
                         </TableCell>
                       </TableRow>
-  
+
                       <TableRow className="hover:bg-gray-50/50 transition-colors">
                         <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Password</TableCell>
                         <TableCell>
@@ -805,7 +1382,7 @@ export default function FilePage() {
                           </div>
                         </TableCell>
                       </TableRow>
-  
+
                       {step > 2 && manufacturerDetails && (
                         <>
                           <TableRow className="hover:bg-gray-50/50 transition-colors">
@@ -828,7 +1405,7 @@ export default function FilePage() {
                           </TableRow>
                         </>
                       )}
-  
+
                       {(step === 3 || step === 4) && (
                         <>
                           <TableRow className="hover:bg-gray-50/50 transition-colors">
@@ -859,7 +1436,7 @@ export default function FilePage() {
                 </div>
               )}
             </div>
-  
+
             {/* Form Section */}
             <div className="w-full lg:w-1/2">
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -880,7 +1457,7 @@ export default function FilePage() {
                     onManufacturerDetailsFound={setManufacturerDetails}
                   />
                 )}
-  
+
                 {step === 2 && (
                   <Step2Details
                     loading={loading}
@@ -889,16 +1466,18 @@ export default function FilePage() {
                     onNext={() => setStep(3)}
                   />
                 )}
-  
+
                 {step === 3 && (
                   <Step3Payment
                     mpesaNumber={formData.mpesaNumber}
                     paymentStatus={paymentStatus}
                     onMpesaNumberChange={(value) => setFormData({ ...formData, mpesaNumber: value })}
                     onSimulatePayment={simulatePayment}
+                    pin={formData.pin}
+                    manufacturerDetails={manufacturerDetails}
                   />
                 )}
-  
+
                 {step === 4 && (
                   <Step4Filing
                     pin={formData.pin}
@@ -906,12 +1485,13 @@ export default function FilePage() {
                     error={error}
                     filingStatus={filingStatus}
                     sessionStartTime={sessionStartTime}
+                    formData={formData}
                     onPasswordChange={(value) => setFormData({ ...formData, password: value })}
                     onDownloadReceipt={downloadReceipt}
                     onEndSession={endSession}
                   />
                 )}
-  
+
                 {/* Step Buttons */}
                 <div className="flex flex-col md:flex-row md:justify-between md:gap-2 mt-6 lg:mt-8">
                   {renderStepButtons()}
@@ -921,7 +1501,7 @@ export default function FilePage() {
           </div>
         </CardContent>
       </Card>
-  
+
       {/* Session Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
@@ -938,7 +1518,7 @@ export default function FilePage() {
               </p>
             </DialogDescription>
           </DialogHeader>
-  
+
           <DialogFooter className="flex flex-col space-y-2">
             <Button
               type="button"
@@ -957,7 +1537,7 @@ export default function FilePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-  
+
       {/* Timeout Dialog */}
       <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
         <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
