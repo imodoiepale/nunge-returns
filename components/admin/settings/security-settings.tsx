@@ -251,7 +251,7 @@ export function SecuritySettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert variant="warning" className="mb-6">
+          <Alert variant="destructive" className="mb-6">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Handle with care</AlertTitle>
             <AlertDescription>
