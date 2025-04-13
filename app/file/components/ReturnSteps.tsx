@@ -2248,7 +2248,9 @@ export function Step4Filing({
                         <div className="mt-4 p-2 border rounded-lg">
                             <h4 className="font-semibold text-sm mb-1">Filing Receipt</h4>
                             <p className="text-xs text-muted-foreground">
-                                Your nil returns have been successfully filed. Receipt number: {receiptNumber || "NR" + Math.random().toString().slice(2, 10)}
+                                Your nil returns have been successfully filed. Receipt number: <strong>{receiptNumber || "NR" + Math.random().toString().slice(2, 10)}</strong>
+                                <br />
+                                An email has also been sent to you with both acknowledgement and purchase receipts.
                             </p>
                             <div className="flex space-x-2 mt-4">
                                 <Button

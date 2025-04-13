@@ -1182,7 +1182,7 @@ export default function FilePage() {
     }
 
     const link = document.createElement('a')
-    link.href = `/receipts/${formData.pin.toUpperCase()} - ${type.toUpperCase()} - RECEIPT.PDF`  // Replace with actual receipt URL
+    link.href = '/nunge.pdf'
     link.download = `${manufacturerDetails?.name?.toUpperCase() || 'UNKNOWN'} - ${formData.pin.toUpperCase()} - ${type.toUpperCase()}_RECEIPT.PDF`
     document.body.appendChild(link)
     link.click()
