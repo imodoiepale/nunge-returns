@@ -81,8 +81,8 @@ export async function PATCH(request) {
   }
 }
 
-// POST /api/sessions/:id/complete
-export async function POST(request, { params }) {
+// PATCH /api/sessions/:id/complete
+export async function PATCH(request, { params }) {
   try {
     const { id } = params;
     const { status = 'completed', errorMessage } = await request.json();
