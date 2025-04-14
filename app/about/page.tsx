@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { PageBackground } from "@/components/ui/page-background"
+import ServiceSidebar from '@/components/service-sidebar'
 
 export default function AboutPage() {
   return (
@@ -37,6 +38,8 @@ export default function AboutPage() {
             At Nunge Returns, we combine cutting-edge technology with user-friendly design to create a tax filing experience that's both efficient and enjoyable. Our platform leverages automation and blockchain security to ensure accuracy and peace of mind for all our users.
           </p>
         </div>
+
+        <ServiceSidebar />
       </div>
     </PageBackground>
   )

@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import AnalyticsService from '@/lib/analyticsService';
 import { v4 as uuidv4 } from 'uuid';
+import ServiceSidebar from "@/components/service-sidebar"
 
 export default function Home() {
   const [userCount, setUserCount] = useState<number>(0);
@@ -48,7 +49,7 @@ export default function Home() {
               Trusted by <span className="font-bold">{userCount}+</span> Kenyans
             </p>
           </div>
-          <div className="absolute top-4 right-4 animate-bounce-slow duration-[4s] md:top-8 md:right-8">
+          <div className="hidden sm:block absolute top-4 right-4 animate-bounce-slow duration-[4s] md:top-8 md:right-8">
             <Image
               src="/simple-logo - with-text.png"
               alt="Kenya Revenue Authority (KRA) logo"
@@ -57,33 +58,8 @@ export default function Home() {
               className="rounded-2xl"
             />
           </div>
-          {/* Left sidebar service cards */}
-          <div className="fixed left-4 top-1/4 -translate-y-1/2 flex flex-col gap-3 z-20 animate-bounce duration-5000 hover:animate-none hover:top-1/2">
-            {[
-              { title: "Renew KRA Password", icon: "key" },
-              { title: "Change KRA Email", icon: "mail" },
-              { title: "Register KRA PIN", icon: "file-plus" },
-              { title: "Register NSSF", icon: "shield" },
-              { title: "Register SHIF", icon: "heart-pulse" }
-            ].map((service, index) => (
-              <Link
-                key={index}
-                href={`/services/${service.title.toLowerCase().replace(/\s+/g, '-')}`}
-                className="group"
-              >
-                <div className="bg-white w-16 h-16 rounded-lg shadow-md flex flex-col items-center justify-center p-1 transition-all duration-300 group-hover:bg-primary group-hover:scale-110 group-hover:shadow-lg">
-                  {service.icon === "key" && <KeyIcon className="h-6 w-6 text-primary group-hover:text-white" />}
-                  {service.icon === "mail" && <MailIcon className="h-6 w-6 text-primary group-hover:text-white" />}
-                  {service.icon === "file-plus" && <FilePlusIcon className="h-6 w-6 text-primary group-hover:text-white" />}
-                  {service.icon === "shield" && <Shield className="h-6 w-6 text-primary group-hover:text-white" />}
-                  {service.icon === "heart-pulse" && <ActivityIcon className="h-6 w-6 text-primary group-hover:text-white" />}
-                  <span className="text-[8px] mt-1 font-medium text-center text-muted-foreground group-hover:text-white">
-                    {service.title}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          
+          <ServiceSidebar />
 
           <div className="space-y-4">
             <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl">
