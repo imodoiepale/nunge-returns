@@ -541,28 +541,6 @@ export default function FilePage() {
     router.push('/')
   }
 
-  const handleDialogAction = (action) => {
-    setShowDialog(false)
-    if (action === 'proceed') {
-      // Logic for proceeding with a new session
-      setFormData({
-        pin: "",
-        manufacturerName: "",
-        email: "",
-        mobileNumber: "",
-        mpesaNumber: "",
-        password: "",
-        fileType: fileType,
-        activeTab: 'pin'
-      })
-      setManufacturerDetails(null)
-      setPinValidationStatus("idle")
-      setPasswordValidationStatus("idle")
-      setStep(1)
-    }
-    // If 'cancel', just close the dialog
-  }
-
   const handleActiveTabChange = (tab: 'id' | 'pin') => {
     setFormData(prev => ({ ...prev, activeTab: tab }));
     // Reset validation states when switching tabs
@@ -592,6 +570,40 @@ export default function FilePage() {
     }
   };
 
+  // Add this with your other handler functions
+  const handleMpesaNumberChange = (value) => {
+    setFormData(prev => ({ ...prev, mpesaNumber: value }))
+  }
+
+  // Also, add the handleSimulatePayment function which is used in Step3Payment
+  const handleSimulatePayment = (status) => {
+    setPaymentStatus(status)
+    if (status === "Paid") {
+      setTimeout(() => {
+        setReceiptNumber(`NR${Math.floor(Math.random() * 1000000)}`)
+      }, 500)
+    }
+  }
+
+  // Add this with your other handler functions
+  const handleDownloadReceipt = (type) => {
+    const link = document.createElement('a')
+    link.href = '/sample-receipt.pdf'
+    link.download = `${manufacturerDetails?.name || 'UNKNOWN'}_${formData.pin}_${type}_RECEIPT.PDF`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    // Record download activity (you can add this if you have analytics)
+    console.log(`Downloaded ${type} receipt for PIN: ${formData.pin}`)
+
+    // If downloading "all" receipts, redirect to home after a delay
+    if (type === 'all') {
+      setTimeout(() => {
+        router.push('/')
+      }, 2000)
+    }
+  }
   const handlePINChangeWrapper = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPin = e.target.value.toUpperCase();
     console.log('[APP] PIN changed:', newPin);
