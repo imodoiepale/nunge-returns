@@ -4,12 +4,10 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Badge, Check, CheckCircle, Clock, Eye, EyeOff } from 'lucide-react'
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
+import { ArrowLeft, Check, CheckCircle, Clock, Download, AlertCircle } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
 import { Step1PIN, Step2Details, Step3Payment, Step4Filing } from "./components/ReturnSteps"
 import { FormData, ManufacturerDetails, FilingStatus } from './lib/types'
@@ -26,11 +24,18 @@ import { cn } from "@/lib/utils"
 import SessionManagementService from "@/src/sessionManagementService"
 import { supabase } from '@/lib/supabaseClient'
 import { handleSubmit as submitHelper, endSession as endSessionHelper, fetchManufacturerDetails } from './lib/sessionHelpers'
+import { PageBackground } from "@/components/ui/page-background"
+import { useSearchParams } from "next/navigation"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 const sessionService = new SessionManagementService()
 
 export default function FilePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const fileType = searchParams.get('type') || 'individual'
+
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<FormData>({
     pin: "",
@@ -39,6 +44,7 @@ export default function FilePage() {
     mobileNumber: "",
     mpesaNumber: "",
     password: "",
+    fileType: fileType,
     activeTab: 'pin'
   })
   const [manufacturerDetails, setManufacturerDetails] = useState<ManufacturerDetails | null>(null)
@@ -62,6 +68,10 @@ export default function FilePage() {
   const [sessionTime, setSessionTime] = useState(300)
   const [showWarning, setShowWarning] = useState(false)
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null)
+  const [isComplete, setIsComplete] = useState(false)
+  const [receiptNumber, setReceiptNumber] = useState(null)
+  const [showReceipt, setShowReceipt] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   // Fetch user count
   useEffect(() => {
@@ -525,6 +535,33 @@ export default function FilePage() {
       }
     }
   };
+
+
+  const handleEndSession = () => {
+    router.push('/')
+  }
+
+  const handleDialogAction = (action) => {
+    setShowDialog(false)
+    if (action === 'proceed') {
+      // Logic for proceeding with a new session
+      setFormData({
+        pin: "",
+        manufacturerName: "",
+        email: "",
+        mobileNumber: "",
+        mpesaNumber: "",
+        password: "",
+        fileType: fileType,
+        activeTab: 'pin'
+      })
+      setManufacturerDetails(null)
+      setPinValidationStatus("idle")
+      setPasswordValidationStatus("idle")
+      setStep(1)
+    }
+    // If 'cancel', just close the dialog
+  }
 
   const handleActiveTabChange = (tab: 'id' | 'pin') => {
     setFormData(prev => ({ ...prev, activeTab: tab }));
@@ -1281,165 +1318,161 @@ export default function FilePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center py-4 md:py-8 px-4">
-      {/* Back Link */}
-      <Link
-        href="/file"
-        className="absolute left-4 top-4 flex items-center text-sm font-medium text-muted-foreground"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Back
-      </Link>
+    <PageBackground>
+      <div className="flex min-h-screen flex-col items-center py-4 md:py-8 px-4">
+        {/* Back Link */}
+        <Link
+          href={step === 1 ? "/services/file-nil-returns" : "#"}
+          onClick={(e) => {
+            if (step !== 1) {
+              e.preventDefault()
+              setStep(prev => prev - 1)
+            }
+          }}
+          className="absolute left-4 top-4 flex items-center text-sm font-medium text-muted-foreground"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          {step === 1 ? "Back to service selection" : "Back to previous step"}
+        </Link>
 
-      {/* User Counter */}
-      <div className="text-center mb-4 mt-12 md:mt-0">
-        <p className="text-base md:text-lg font-semibold">
-          You are user number: <span className="text-primary">#{userCount}</span>
-        </p>
-        <p className="text-xs md:text-sm text-muted-foreground">
-          Thank you for using our service!
-        </p>
-      </div>
+        {/* User Counter */}
+        <div className="text-center mb-4 mt-12 md:mt-0">
+          <p className="text-base md:text-lg font-semibold">
+            You are user number: <span className="text-primary">#{userCount}</span>
+          </p>
+          <p className="text-xs md:text-sm text-muted-foreground">
+            Thank you for using our service!
+          </p>
+        </div>
 
-      {/* Main Card */}
-      <Card className={cn(
-        "w-full max-w-6xl relative",
-        showWarning && "border-yellow-500"
-      )}>
-        <CardHeader>
-          {/* Session Timer */}
-          {sessionStartTime && (
-            <div className="absolute top-4 right-4">
-              <div className={cn(
-                "rounded-full px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 text-sm",
-                showWarning
-                  ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white"
-                  : "bg-gradient-to-r from-purple-500 to-purple-700 text-white"
-              )}>
-                <Clock className="w-3 h-3 md:w-4 md:h-4" />
-                <span className="font-mono">
-                  {Math.floor(sessionTime / 60)}:{(sessionTime % 60).toString().padStart(2, '0')}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <CardTitle className="text-xl md:text-2xl">File Your Returns</CardTitle>
-          <CardDescription>
-            Step {step} of 4: {steps[step - 1]}
-          </CardDescription>
-
-          {/* Progress Steps */}
-          <div className="flex justify-between mt-4 px-2">
-            {steps.map((s, index) => (
-              <div key={index} className={`flex flex-col items-center ${index < step ? 'text-primary' : 'text-muted-foreground'}`}>
-                <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm ${index < step ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                  {index < step ? <Check className="w-4 h-4" /> : index + 1}
+        {/* Success Card (shown when filing is complete) */}
+        {isComplete ? (
+          <Card className="border-green-200 bg-white/95 shadow-lg max-w-3xl w-full">
+            <CardHeader className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-t-lg pb-8">
+              <div className="absolute left-1/2 -translate-x-1/2 -bottom-8">
+                <div className="bg-white rounded-full p-1 shadow-lg">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500">
+                    <CheckCircle className="h-8 w-8 text-white" />
+                  </div>
                 </div>
-                <span className="text-[10px] md:text-xs mt-1 text-center hidden md:block">{s}</span>
               </div>
-            ))}
-          </div>
-        </CardHeader>
+              <CardTitle className="text-center text-2xl">Filing Successful!</CardTitle>
+              <CardDescription className="text-white/90 text-center">
+                Your nil return has been successfully filed with KRA
+              </CardDescription>
+            </CardHeader>
 
-        <CardContent>
-          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-            {/* Filled Details Section */}
-            <div className="w-full lg:w-1/2 lg:border-r lg:pr-8">
-              <h3 className="text-base md:text-lg font-semibold mb-4">Filled Details</h3>
-              {step > 1 && (
-                <div className="rounded-lg border border-gray-100 bg-white/50 backdrop-blur-sm shadow-lg overflow-x-auto">
-                  <Table className="[&_tr:last-child]:border-0 min-w-[300px]">
-                    <TableBody className="divide-y divide-gray-50">
-                      <TableRow className="hover:bg-gray-50/50 transition-colors">
-                        <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">PIN</TableCell>
-                        <TableCell className="font-mono tracking-wide text-gray-900">
-                          {formData.pin}
-                        </TableCell>
-                      </TableRow>
-
-                      <TableRow className="hover:bg-gray-50/50 transition-colors">
-                        <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Password</TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-between">
-                            <div className="font-mono tracking-wide text-gray-900">
-                              {showPassword ? formData.password : "•".repeat(formData.password.length)}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <button
-                                type="button"
-                                className="text-gray-500 hover:text-gray-700 transition-colors"
-                                onClick={() => setShowPassword(!showPassword)}
-                              >
-                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                              {passwordValidationStatus === "valid" && (
-                                <div className="rounded-full bg-gradient-to-r from-green-500 to-green-600 p-1">
-                                  <CheckCircle className="w-3.5 h-3.5 text-white" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-
-                      {step > 2 && manufacturerDetails && (
-                        <>
-                          <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Name</TableCell>
-                            <TableCell className="text-gray-900 break-words">
-                              {manufacturerDetails.name}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Email</TableCell>
-                            <TableCell className="text-gray-900 break-words">
-                              {manufacturerDetails.contactDetails.email}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Mobile</TableCell>
-                            <TableCell className="text-gray-900">
-                              {manufacturerDetails.contactDetails.mobile}
-                            </TableCell>
-                          </TableRow>
-                        </>
-                      )}
-
-                      {(step === 3 || step === 4) && (
-                        <>
-                          <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">M-Pesa Number</TableCell>
-                            <TableCell className="font-mono text-gray-900">
-                              {formData.mpesaNumber}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow className="hover:bg-gray-50/50 transition-colors">
-                            <TableCell className="font-medium text-gray-700 pl-4 md:pl-6">Payment Status</TableCell>
-                            <TableCell>
-                              <Badge className={cn(
-                                "text-white font-medium text-xs md:text-sm",
-                                paymentStatus === "Paid"
-                                  ? "bg-gradient-to-r from-green-500 to-green-600"
-                                  : paymentStatus === "Processing"
-                                    ? "bg-gradient-to-r from-yellow-500 to-yellow-600"
-                                    : "bg-gradient-to-r from-red-500 to-red-600"
-                              )}>
-                                {paymentStatus}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        </>
-                      )}
-                    </TableBody>
-                  </Table>
+            <CardContent className="pt-12 space-y-6">
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <div>
+                  <p className="text-sm text-gray-500">Receipt Number</p>
+                  <p className="font-medium">{receiptNumber}</p>
                 </div>
-              )}
-            </div>
+                <div>
+                  <p className="text-sm text-gray-500">Filing Date</p>
+                  <p className="font-medium">{new Date().toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">KRA PIN</p>
+                  <p className="font-medium">{formData.pin}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Type</p>
+                  <p className="font-medium capitalize">{formData.fileType} Nil Return</p>
+                </div>
+              </div>
 
-            {/* Form Section */}
-            <div className="w-full lg:w-1/2">
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <Alert className="bg-blue-50 border-blue-200">
+                <AlertTitle className="text-blue-700">Next Steps</AlertTitle>
+                <AlertDescription className="text-blue-600">
+                  <ul className="text-sm list-disc ml-5 mt-2 space-y-1">
+                    <li>A confirmation email has been sent to your registered email address</li>
+                    <li>The filing acknowledgment receipt is now available for download</li>
+                    <li>Your tax compliance certificate will be available within 24 hours</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    className="border-green-500 text-green-700 hover:bg-green-50"
+                    onClick={() => handleDownloadReceipt("acknowledgement")}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Acknowledgement Receipt
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-green-500 text-green-700 hover:bg-green-50"
+                    onClick={() => handleDownloadReceipt("payment")}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Payment Receipt
+                  </Button>
+                </div>
+
+                <Button
+                  className="mt-2 bg-gradient-to-r from-purple-600 to-purple-800"
+                  onClick={handleEndSession}
+                >
+                  Return to Home
+                </Button>
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex justify-center border-t p-4">
+              <p className="text-xs text-gray-500">Need assistance? Contact our support at support@nungereturns.co.ke</p>
+            </CardFooter>
+          </Card>
+        ) : (
+          /* Main Card (shown during filing process) */
+          <Card className={cn(
+            "w-full max-w-3xl relative",
+            showWarning && "border-yellow-500"
+          )}>
+            <CardHeader>
+              {/* Session Timer */}
+              <div className="absolute top-4 right-4">
+                <div className={cn(
+                  "rounded-full px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 text-sm",
+                  sessionTime < 60
+                    ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white"
+                    : "bg-gradient-to-r from-purple-500 to-purple-700 text-white"
+                )}>
+                  <Clock className="w-3 h-3 md:w-4 md:h-4" />
+                  <span className="font-mono">
+                    {Math.floor(sessionTime / 60)}:{(sessionTime % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+              </div>
+
+              <CardTitle className="text-xl md:text-2xl">
+                File Your {fileType === 'company' ? 'Company' : 'Individual'} Nil Returns
+              </CardTitle>
+              <CardDescription>
+                Step {step} of 4: {steps[step - 1]}
+              </CardDescription>
+
+              {/* Progress Steps */}
+              <div className="mt-6">
+                <Progress value={(step / 4) * 100} className="h-2" />
+                <div className="flex justify-between mt-2">
+                  {steps.map((s, index) => (
+                    <div key={index} className={`flex flex-col items-center ${index < step ? 'text-primary' : 'text-muted-foreground'}`}>
+                      <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm ${index < step ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                        {index < step ? <Check className="w-4 h-4" /> : index + 1}
+                      </div>
+                      <span className="text-[10px] md:text-xs mt-1 text-center hidden md:block">{s}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
                 {step === 1 && (
                   <Step1PIN
                     pin={formData.pin}
@@ -1471,8 +1504,8 @@ export default function FilePage() {
                   <Step3Payment
                     mpesaNumber={formData.mpesaNumber}
                     paymentStatus={paymentStatus}
-                    onMpesaNumberChange={(value) => setFormData({ ...formData, mpesaNumber: value })}
-                    onSimulatePayment={simulatePayment}
+                    onMpesaNumberChange={handleMpesaNumberChange}
+                    onSimulatePayment={handleSimulatePayment}
                     pin={formData.pin}
                     manufacturerDetails={manufacturerDetails}
                   />
@@ -1486,78 +1519,104 @@ export default function FilePage() {
                     filingStatus={filingStatus}
                     sessionStartTime={sessionStartTime}
                     formData={formData}
-                    onPasswordChange={(value) => setFormData({ ...formData, password: value })}
-                    onDownloadReceipt={downloadReceipt}
-                    onEndSession={endSession}
+                    onPasswordChange={(value) => setFormData(prev => ({ ...prev, password: value }))}
+                    onDownloadReceipt={handleDownloadReceipt}
+                    onEndSession={handleEndSession}
                   />
                 )}
 
                 {/* Step Buttons */}
-                <div className="flex flex-col md:flex-row md:justify-between md:gap-2 mt-6 lg:mt-8">
-                  {renderStepButtons()}
+                <div className="flex justify-between mt-6">
+                  {step > 1 && (
+                    <Button type="button" variant="outline" onClick={() => setStep(prev => prev - 1)}>
+                      Back
+                    </Button>
+                  )}
+
+                  {step < 4 && (
+                    <Button
+                      type="submit"
+                      disabled={
+                        (step === 1 && (pinValidationStatus !== "valid" || passwordValidationStatus !== "valid")) ||
+                        (step === 3 && paymentStatus !== "Paid")
+                      }
+                      className="bg-gradient-to-r from-purple-500 to-purple-700 ml-auto"
+                    >
+                      {step === 3 ? "Proceed to Filing" : "Next Step"}
+                    </Button>
+                  )}
+
+                  {step === 4 && (
+                    <Button
+                      type="submit"
+                      className="bg-gradient-to-r from-green-500 to-green-700 ml-auto"
+                    >
+                      File Nil Returns
+                    </Button>
+                  )}
                 </div>
               </form>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Session Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg">Active Session Found</DialogTitle>
-            <DialogDescription className="text-black space-y-2 text-sm">
-              <p>
-                There is an active session for <strong>{existingSessionData?.manufacturerName}</strong>
-              </p>
-              <p>PIN: {existingSessionData?.pin}</p>
-              <p>Progress: Step {existingSessionData?.current_step || 1} of 4</p>
-              <p className="font-semibold text-red-600">
-                Proceeding will end the existing session and start a new one.
-              </p>
-            </DialogDescription>
-          </DialogHeader>
+        {/* Session Timeout Dialog */}
+        <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
+          <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg">Session Timeout</DialogTitle>
+              <DialogDescription className="text-black text-sm">
+                Your session has expired due to inactivity. You will need to start a new session.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                onClick={handleEndSession}
+                className="w-full bg-gradient-to-r from-purple-500 to-purple-700"
+              >
+                Start New Session
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-          <DialogFooter className="flex flex-col space-y-2">
-            <Button
-              type="button"
-              onClick={() => handleDialogAction('cancel')}
-              className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
-            >
-              Keep Existing Session
-            </Button>
-            <Button
-              type="button"
-              onClick={() => handleDialogAction('proceed')}
-              className="w-full bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800"
-            >
-              End & Start New
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {/* Existing Session Dialog */}
+        <Dialog open={showDialog} onOpenChange={setShowDialog}>
+          <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg">Active Session Found</DialogTitle>
+              <DialogDescription className="text-black space-y-2 text-sm">
+                <p>
+                  There is an active session for <strong>{existingSessionData?.manufacturerName}</strong>
+                </p>
+                <p>PIN: {existingSessionData?.pin}</p>
+                <p>Progress: Step {existingSessionData?.current_step || 1} of 4</p>
+                <p className="font-semibold text-red-600">
+                  Proceeding will end the existing session and start a new one.
+                </p>
+              </DialogDescription>
+            </DialogHeader>
 
-      {/* Timeout Dialog */}
-      <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
-        <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg">Session Timeout</DialogTitle>
-            <DialogDescription className="text-black text-sm">
-              Your session has expired due to inactivity. You will need to start a new session.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              onClick={endSession}
-              className="w-full bg-gradient-to-r from-purple-500 to-purple-700"
-            >
-              Start New Session
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter className="flex flex-col space-y-2">
+              <Button
+                type="button"
+                onClick={() => handleDialogAction('cancel')}
+                className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
+              >
+                Keep Existing Session
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleDialogAction('proceed')}
+                className="w-full bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800"
+              >
+                End & Start New
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </PageBackground>
   )
 }
 
