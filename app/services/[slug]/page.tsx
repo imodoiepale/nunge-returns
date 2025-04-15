@@ -22,7 +22,7 @@ const serviceData = {
         steps: [
             "Fill in your personal details",
             "Upload required documents",
-            "Verify your email and phone number",
+            // "Verify your email and phone number",
             "Receive your KRA PIN instantly"
         ],
         faq: [
@@ -231,9 +231,9 @@ export default function ServicePage({ params }) {
 
     return (
         <PageBackground>
-            <ServiceSidebar />
+            {/* <ServiceSidebar /> */}
 
-            <div className="container mx-auto py-6 px-4 md:py-12">
+            <div className="container mx-auto py-6 px-4 md:py-1">
                 <Link href="/services" className="inline-flex items-center text-primary hover:underline mb-4 md:mb-8 text-sm">
                     <ArrowLeft className="mr-1 h-3 w-3 md:h-4 md:w-4" /> Back to all services
                 </Link>
@@ -329,13 +329,13 @@ export default function ServicePage({ params }) {
                                         <span className="text-xs md:text-sm flex items-center">
                                             <Clock className="h-3 w-3 mr-1" /> Standard Processing
                                         </span>
-                                        <span className="text-xs md:text-sm font-medium">30 minutes</span>
+                                        <span className="text-xs md:text-sm font-medium">5 minutes</span>
                                     </div>
                                     <div className="flex items-center justify-between mt-1">
                                         <span className="text-xs md:text-sm flex items-center">
                                             <Clock className="h-3 w-3 mr-1" /> Express Processing
                                         </span>
-                                        <span className="text-xs md:text-sm font-medium text-primary">5 minutes</span>
+                                        <span className="text-xs md:text-sm font-medium text-primary">1 minute</span>
                                     </div>
                                 </div>
 

@@ -541,27 +541,27 @@ export default function FilePage() {
     router.push('/')
   }
 
-  const handleDialogAction = (action) => {
-    setShowDialog(false)
-    if (action === 'proceed') {
-      // Logic for proceeding with a new session
-      setFormData({
-        pin: "",
-        manufacturerName: "",
-        email: "",
-        mobileNumber: "",
-        mpesaNumber: "",
-        password: "",
-        fileType: fileType,
-        activeTab: 'pin'
-      })
-      setManufacturerDetails(null)
-      setPinValidationStatus("idle")
-      setPasswordValidationStatus("idle")
-      setStep(1)
-    }
-    // If 'cancel', just close the dialog
-  }
+  // const handleDialogAction = (action) => {
+  //   setShowDialog(false)
+  //   if (action === 'proceed') {
+  //     // Logic for proceeding with a new session
+  //     setFormData({
+  //       pin: "",
+  //       manufacturerName: "",
+  //       email: "",
+  //       mobileNumber: "",
+  //       mpesaNumber: "",
+  //       password: "",
+  //       fileType: fileType,
+  //       activeTab: 'pin'
+  //     })
+  //     setManufacturerDetails(null)
+  //     setPinValidationStatus("idle")
+  //     setPasswordValidationStatus("idle")
+  //     setStep(1)
+  //   }
+  //   // If 'cancel', just close the dialog
+  // }
 
   const handleActiveTabChange = (tab: 'id' | 'pin') => {
     setFormData(prev => ({ ...prev, activeTab: tab }));
