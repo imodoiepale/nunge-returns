@@ -898,6 +898,7 @@ export function ReturnSteps() {
                     onPasswordChange={(value) => setFormData(prev => ({ ...prev, password: value }))}
                     onDownloadReceipt={handleDownloadReceipt}
                     onEndSession={handleEndSession}
+                    onError={setError}
                 />
             )}
 
