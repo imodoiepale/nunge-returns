@@ -1,0 +1,788 @@
+// @ts-nocheck
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, CheckCircleIcon, ExclamationTriangleIcon, X } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
+import Link from "next/link"
+import { supabase } from '@/lib/supabaseClient'
+import SessionManagementService from "@/src/sessionManagementService"
+import { FilingStatus, ManufacturerDetails, TaxpayerData, Step1Props, Step2Props, Step3Props, Step4Props, PaymentStatus, ValidationStatus } from "../lib/types"
+
+const sessionService = new SessionManagementService()
+
+export default function Step1PIN({
+    pin,
+    password,
+    error,
+    passwordError,
+    pinValidationStatus,
+    passwordValidationStatus,
+    onPINChange,
+    onPasswordChange,
+    onPasswordReset,
+    onPasswordEmailReset,
+    onNext,
+    onActiveTabChange,
+    onManufacturerDetailsFound
+}: Step1Props) {
+    const [showPassword, setShowPassword] = useState(false)
+    const [hasClicked, setHasClicked] = useState(false)
+    const [acceptedTerms, setAcceptedTerms] = useState(true)
+    const [activeTab, setActiveTab] = useState<'id' | 'pin'>('id')
+    const [idNumber, setIdNumber] = useState('')
+    const [firstName, setFirstName] = useState('')
+    const [idSearchStatus, setIdSearchStatus] = useState<'idle' | 'searching' | 'found' | 'not-found'>('idle')
+    const [taxpayerData, setTaxpayerData] = useState<TaxpayerData | null>(null)
+    const [idSearchError, setIdSearchError] = useState<string | null>(null)
+
+    const handleIdSearch = async () => {
+        if (!idNumber || !firstName) return;
+
+        setIdSearchStatus('searching');
+        setIdSearchError(null);
+        setTaxpayerData(null);
+
+        try {
+            console.log(`Searching with ID: ${idNumber}, Name: ${firstName}`);
+
+            // Create or update database record for the search attempt
+            const currentSessionId = sessionService.getData('currentSessionId');
+            if (currentSessionId) {
+                try {
+                    await supabase
+                        .from('session_activities')
+                        .insert([{
+                            session_id: currentSessionId,
+                            activity_type: 'user_action',
+                            description: 'ID search attempted',
+                            metadata: {
+                                id_number: idNumber,
+                                first_name: firstName,
+                                search_method: 'id'
+                            }
+                        }]);
+
+                    console.log('[DB] Recorded ID search attempt in database');
+                } catch (dbError) {
+                    console.error('[DB ERROR] Failed to record search attempt:', dbError);
+                }
+            }
+
+            const response = await fetch(
+                `/api/manufacturer/brs?id=${encodeURIComponent(idNumber)}&firstName=${encodeURIComponent(firstName)}`,
+                { method: 'GET' }
+            );
+
+            if (!response.ok) {
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const responseText = await response.text();
+            console.log('Raw API response:', responseText);
+
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Failed to parse response as JSON:', parseError);
+                throw new Error('Invalid response format from server');
+            }
+
+            console.log('Parsed API response:', data);
+
+            if (data.success && data.data) {
+                console.log('Found taxpayer data:', data.data);
+
+                // Check if the data has required fields
+                if (!data.data.pin || !data.data.taxpayerName) {
+                    throw new Error('Incomplete taxpayer data returned');
+                }
+
+                // Add default password if not provided
+                const enrichedData = {
+                    ...data.data,
+                    password: data.data.password || '1234'
+                };
+
+                setTaxpayerData(enrichedData);
+                setIdSearchStatus('found');
+
+                // Record successful search in database
+                if (currentSessionId) {
+                    try {
+                        await supabase
+                            .from('session_activities')
+                            .insert([{
+                                session_id: currentSessionId,
+                                activity_type: 'user_action',
+                                description: 'ID search successful',
+                                metadata: {
+                                    id_number: idNumber,
+                                    first_name: firstName,
+                                    pin: data.data.pin,
+                                    taxpayer_name: data.data.taxpayerName
+                                }
+                            }]);
+
+                        console.log('[DB] Recorded successful ID search in database');
+                    } catch (dbError) {
+                        console.error('[DB ERROR] Failed to record successful search:', dbError);
+                    }
+                }
+            } else {
+                console.log('No matching records found or invalid response format');
+                setIdSearchStatus('not-found');
+                setIdSearchError('No matching records found. Please verify your details.');
+
+                // Record failed search in database
+                if (currentSessionId) {
+                    try {
+                        await supabase
+                            .from('session_activities')
+                            .insert([{
+                                session_id: currentSessionId,
+                                activity_type: 'user_action',
+                                description: 'ID search failed',
+                                metadata: {
+                                    id_number: idNumber,
+                                    first_name: firstName,
+                                    reason: 'No matching records'
+                                }
+                            }]);
+
+                        console.log('[DB] Recorded failed ID search in database');
+                    } catch (dbError) {
+                        console.error('[DB ERROR] Failed to record failed search:', dbError);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error during ID search:', error);
+            setIdSearchStatus('not-found');
+            setIdSearchError(error.message || 'An error occurred while searching. Please try again.');
+
+            // Record error in database
+            const currentSessionId = sessionService.getData('currentSessionId');
+            if (currentSessionId) {
+                try {
+                    await supabase
+                        .from('session_activities')
+                        .insert([{
+                            session_id: currentSessionId,
+                            activity_type: 'user_action',
+                            description: 'ID search error',
+                            metadata: {
+                                id_number: idNumber,
+                                first_name: firstName,
+                                error: error.message
+                            }
+                        }]);
+
+                    console.log('[DB] Recorded ID search error in database');
+                } catch (dbError) {
+                    console.error('[DB ERROR] Failed to record search error:', dbError);
+                }
+            }
+        }
+    };
+
+    const handleProceedWithPin = async () => {
+        if (taxpayerData) {
+            console.log('[PROCEED] Proceeding with PIN from taxpayer data:', taxpayerData.pin);
+
+            // First update the PIN and password
+            onPINChange({ target: { value: taxpayerData.pin } } as React.ChangeEvent<HTMLInputElement>);
+            onPasswordChange({ target: { value: taxpayerData.password || '1234' } } as React.ChangeEvent<HTMLInputElement>);
+
+            // Convert taxpayer data to manufacturer details format
+            const manufacturerDetails = {
+                pin: taxpayerData.pin,
+                name: taxpayerData.taxpayerName,
+                contactDetails: {
+                    mobile: taxpayerData.mobileNumber,
+                    email: taxpayerData.mainEmailId,
+                    secondaryEmail: taxpayerData.secondaryEmail
+                },
+                businessDetails: {
+                    name: taxpayerData.businessInfo?.name || taxpayerData.taxpayerName,
+                    registrationNumber: taxpayerData.businessInfo?.registrationNumber || '',
+                    registrationDate: taxpayerData.businessInfo?.registrationDate || '',
+                    commencedDate: taxpayerData.businessInfo?.commencementDate || ''
+                },
+                postalAddress: taxpayerData.postalAddress || {
+                    postalCode: '',
+                    town: '',
+                    poBox: ''
+                },
+                physicalAddress: {
+                    descriptive: taxpayerData.descriptiveAddress || ''
+                }
+            };
+
+            console.log('[PROCEED] Constructed manufacturer details:', manufacturerDetails);
+
+            // Record authenticated user in database
+            const currentSessionId = sessionService.getData('currentSessionId');
+            if (currentSessionId) {
+                try {
+                    console.log('[DB] Updating session with user data');
+
+                    // Generate UUID for user
+                    const userId = crypto.randomUUID();
+
+                    // First check if user already exists
+                    const { data: existingUser, error: userCheckError } = await supabase
+                        .from('users')
+                        .select('id')
+                        .eq('email', taxpayerData.mainEmailId)
+                        .single();
+
+                    // If user exists, update instead of insert
+                    if (existingUser) {
+                        const { data: userData, error: userError } = await supabase
+                            .from('users')
+                            .update({
+                                pin: taxpayerData.pin,
+                                name: taxpayerData.taxpayerName,
+                                phone: taxpayerData.mobileNumber,
+                                id_number: idNumber,
+                                first_name: firstName,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('email', taxpayerData.mainEmailId)
+                            .select()
+                            .single();
+
+                        if (userError) {
+                            console.error('[DB ERROR] Failed to update user data:', userError);
+                        } else {
+                            console.log('[DB] User data updated:', userData);
+                        }
+                    } else {
+                        // Create new user with a generated ID
+                        const userId = crypto.randomUUID();
+                        const { data: userData, error: userError } = await supabase
+                            .from('users')
+                            .insert({
+                                id: userId,
+                                pin: taxpayerData.pin,
+                                name: taxpayerData.taxpayerName,
+                                email: taxpayerData.mainEmailId,
+                                phone: taxpayerData.mobileNumber,
+                                id_number: idNumber,
+                                first_name: firstName
+                            })
+                            .select()
+                            .single();
+
+                        if (userError) {
+                            console.error('[DB ERROR] Failed to update user data:', userError);
+                        } else {
+                            console.log('[DB] User data updated:', userData);
+                        }
+                    }
+
+                    // Then update session with user data
+                    const { data: sessionData, error: sessionError } = await supabase
+                        .from('sessions')
+                        .update({
+                            pin: taxpayerData.pin,
+                            email: taxpayerData.mainEmailId,
+                            name: taxpayerData.taxpayerName,
+                            current_step: 1,
+                            form_data: {
+                                pin: taxpayerData.pin,
+                                email: taxpayerData.mainEmailId,
+                                manufacturerName: taxpayerData.taxpayerName,
+                                mobileNumber: taxpayerData.mobileNumber,
+                                password: taxpayerData.password || '1234',
+                                mpesaNumber: taxpayerData.mobileNumber,
+                                authentication_method: 'id_search',
+                                id_number: idNumber,
+                                first_name: firstName
+                            }
+                        })
+                        .eq('id', currentSessionId)
+                        .select();
+
+                    if (sessionError) {
+                        console.error('[DB ERROR] Failed to update session data:', sessionError);
+                    } else {
+                        console.log('[DB] Session data updated:', sessionData);
+                    }
+
+                    // Record authentication in activity log
+                    await supabase
+                        .from('session_activities')
+                        .insert([{
+                            session_id: currentSessionId,
+                            activity_type: 'pin_validated',
+                            description: 'User authenticated via ID search',
+                            metadata: {
+                                id_number: idNumber,
+                                first_name: firstName,
+                                pin: taxpayerData.pin,
+                                taxpayer_name: taxpayerData.taxpayerName,
+                                authentication_method: 'id_search'
+                            }
+                        }]);
+
+                    console.log('[DB] Recorded authentication in activity log');
+
+                } catch (dbError) {
+                    console.error('[DB ERROR] Database error during authentication:', dbError);
+                }
+            }
+
+            // Pass the manufacturer details to parent
+            onManufacturerDetailsFound?.(manufacturerDetails);
+
+            // Then switch to PIN tab after a short delay to allow state updates
+            setTimeout(() => {
+                handleTabChange('pin');
+            }, 100);
+
+            // Reset search states
+            setIdSearchStatus('idle');
+            setIdNumber('');
+            setFirstName('');
+            setTaxpayerData(null);
+        }
+    };
+
+    const handleTabChange = (tab: 'id' | 'pin') => {
+        if (onActiveTabChange) {
+            onActiveTabChange(tab);
+        }
+        setActiveTab(tab);
+
+        // Record tab change in database
+        const currentSessionId = sessionService.getData('currentSessionId');
+        if (currentSessionId) {
+            try {
+                supabase
+                    .from('session_activities')
+                    .insert([{
+                        session_id: currentSessionId,
+                        activity_type: 'user_action',
+                        description: `Tab changed to ${tab}`,
+                        metadata: {
+                            previous_tab: activeTab,
+                            new_tab: tab
+                        }
+                    }])
+                    .then(() => console.log('[DB] Recorded tab change in database'))
+                    .catch(error => console.error('[DB ERROR] Failed to record tab change:', error));
+            } catch (dbError) {
+                console.error('[DB ERROR] Error preparing tab change record:', dbError);
+            }
+        }
+    };
+
+    const handlePINChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newPin = e.target.value.toUpperCase();
+        // First update the PIN value
+        onPINChange({ ...e, target: { ...e.target, value: newPin } });
+
+        if (newPin.length === 11) {
+            // Set status to checking through parent
+            onPINChange({
+                ...e,
+                target: { ...e.target, value: newPin },
+                validationStatus: "checking"
+            });
+
+            try {
+                // Record PIN validation attempt in database
+                const currentSessionId = sessionService.getData('currentSessionId');
+                if (currentSessionId) {
+                    try {
+                        await supabase
+                            .from('session_activities')
+                            .insert([{
+                                session_id: currentSessionId,
+                                activity_type: 'user_action',
+                                description: 'PIN validation attempted',
+                                metadata: {
+                                    pin: newPin
+                                }
+                            }]);
+
+                        console.log('[DB] Recorded PIN validation attempt in database');
+                    } catch (dbError) {
+                        console.error('[DB ERROR] Failed to record PIN validation attempt:', dbError);
+                    }
+                }
+
+                const response = await fetch(`/api/manufacturer/kra?pin=${encodeURIComponent(newPin)}`, {
+                    method: 'GET'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    // Set status to valid through parent
+                    onPINChange({
+                        ...e,
+                        target: { ...e.target, value: newPin },
+                        validationStatus: "valid"
+                    });
+                    // Pass the manufacturer details up
+                    onManufacturerDetailsFound?.(data.data);
+
+                    // Record successful validation in database
+                    if (currentSessionId) {
+                        try {
+                            await supabase
+                                .from('session_activities')
+                                .insert([{
+                                    session_id: currentSessionId,
+                                    activity_type: 'pin_validated',
+                                    description: 'PIN validated successfully',
+                                    metadata: {
+                                        pin: newPin,
+                                        taxpayer_name: data.data.name,
+                                        authentication_method: 'pin'
+                                    }
+                                }]);
+
+                            console.log('[DB] Recorded successful PIN validation in database');
+                        } catch (dbError) {
+                            console.error('[DB ERROR] Failed to record successful PIN validation:', dbError);
+                        }
+                    }
+                } else {
+                    // Set status to invalid through parent
+                    onPINChange({
+                        ...e,
+                        target: { ...e.target, value: newPin },
+                        validationStatus: "invalid"
+                    });
+
+                    // Record failed validation in database
+                    if (currentSessionId) {
+                        try {
+                            await supabase
+                                .from('session_activities')
+                                .insert([{
+                                    session_id: currentSessionId,
+                                    activity_type: 'user_action',
+                                    description: 'PIN validation failed',
+                                    metadata: {
+                                        pin: newPin,
+                                        reason: data.error || 'Invalid PIN'
+                                    }
+                                }]);
+
+                            console.log('[DB] Recorded failed PIN validation in database');
+                        } catch (dbError) {
+                            console.error('[DB ERROR] Failed to record failed PIN validation:', dbError);
+                        }
+                    }
+                }
+            } catch (error) {
+                // Set status to invalid through parent
+                onPINChange({
+                    ...e,
+                    target: { ...e.target, value: newPin },
+                    validationStatus: "invalid"
+                });
+
+                // Record error in database
+                const currentSessionId = sessionService.getData('currentSessionId');
+                if (currentSessionId) {
+                    try {
+                        await supabase
+                            .from('session_activities')
+                            .insert([{
+                                session_id: currentSessionId,
+                                activity_type: 'user_action',
+                                description: 'PIN validation error',
+                                metadata: {
+                                    pin: newPin,
+                                    error: error.message
+                                }
+                            }]);
+
+                        console.log('[DB] Recorded PIN validation error in database');
+                    } catch (dbError) {
+                        console.error('[DB ERROR] Failed to record PIN validation error:', dbError);
+                    }
+                }
+            }
+        } else {
+            // Set status to idle through parent
+            onPINChange({
+                ...e,
+                target: { ...e.target, value: newPin },
+                validationStatus: "idle"
+            });
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            {(error || passwordError) && (
+                <div className="mb-4 p-2 border border-red-200 rounded-md bg-red-50">
+                    <p className="text-red-600 text-sm">{error || passwordError}</p>
+                </div>
+            )}
+
+            <div className="border-b border-gray-200">
+                <nav className="-mb-px flex gap-2">
+                    <button
+                        onClick={() => handleTabChange('id')}
+                        className={cn(
+                            'py-2 px-4 text-sm font-medium rounded-t-lg',
+                            activeTab === 'id'
+                                ? 'border-b-2 border-primary text-primary'
+                                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                    >
+                        Find PIN using ID
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('pin')}
+                        className={cn(
+                            'py-2 px-4 text-sm font-medium rounded-t-lg',
+                            activeTab === 'pin'
+                                ? 'border-b-2 border-primary text-primary'
+                                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                    >
+                        KRA PIN Login
+                    </button>
+                </nav>
+            </div>
+
+            {activeTab === 'id' ? (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="idNumber">ID Number</Label>
+                            <Input
+                                id="idNumber"
+                                value={idNumber}
+                                onChange={(e) => setIdNumber(e.target.value)}
+                                placeholder="Enter your ID number"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="firstName">First Name</Label>
+                            <Input
+                                id="firstName"
+                                value={firstName}
+                                onChange={(e) => setFirstName(e.target.value)}
+                                placeholder="Enter your first name"
+                            />
+                        </div>
+                    </div>
+                    {idSearchStatus !== 'found' && (
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                onClick={handleIdSearch}
+                                disabled={!idNumber || !firstName || idSearchStatus === 'searching'}
+                                className="w-auto px-4 bg-primary hover:bg-primary/90"
+                            >
+                                {idSearchStatus === 'searching' ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Searching...
+                                    </>
+                                ) : (
+                                    'Find KRA PIN'
+                                )}
+                            </Button>
+                        </div>
+                    )}
+
+                    {idSearchStatus === 'found' && taxpayerData && (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-md space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Check className="w-5 h-5 text-green-600" />
+                                    <p className="text-green-700 font-medium">PIN found!</p>
+                                </div>
+                                <Badge variant="default" className="text-xs bg-primary/20 text-primary">
+                                    PIN: {taxpayerData.pin}
+                                </Badge>
+                            </div>
+
+                            <div className="space-y-2 mt-2">
+                                <div className="flex flex-col">
+                                    <span className="text-xs text-gray-500">Name:</span>
+                                    <span className="font-medium">{taxpayerData.taxpayerName}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-xs text-gray-500">Email:</span>
+                                    <span>{taxpayerData.mainEmailId}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-xs text-gray-500">Mobile:</span>
+                                    <span>{taxpayerData.mobileNumber}</span>
+                                </div>
+                            </div>
+
+                            <Button
+                                onClick={handleProceedWithPin}
+                                className="w-full bg-primary hover:bg-primary/90"
+                            >
+                                <div className="flex items-center justify-center gap-2">
+                                    <span>Proceed to Login</span>
+                                    <ArrowRight className="w-4 h-4" />
+                                </div>
+                            </Button>
+                        </div>
+                    )}
+
+                    {idSearchStatus === 'not-found' && (
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                            <div className="flex items-center gap-2">
+                                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <p className="text-red-700">{idSearchError || "No matching records found. Please verify your details."}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="pin">KRA PIN</Label>
+                                {pinValidationStatus === "checking" && (
+                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 animate-bounce">
+                                        <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
+                                        Verifying PIN
+                                    </Badge>
+                                )}
+                                {pinValidationStatus === "invalid" && (
+                                    <Badge variant="destructive" className="text-xs">
+                                        Invalid PIN
+                                    </Badge>
+                                )}
+                                {pinValidationStatus === "valid" && (
+                                    <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                                        Valid PIN
+                                    </Badge>
+                                )}
+                            </div>
+                            <Input
+                                id="pin"
+                                value={pin}
+                                onChange={handlePINChange}
+                                className={cn(
+                                    "uppercase",
+                                    pinValidationStatus === "invalid" && "border-red-500",
+                                    pinValidationStatus === "valid" && "border-green-500"
+                                )}
+                                maxLength={11}
+                                pattern="[AP]\d{10}"
+                                required
+                                autoComplete="off"
+                                autoCapitalize="on"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="password">Password</Label>
+                                {passwordValidationStatus === "checking" && (
+                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 animate-bounce">
+                                        <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
+                                        Verifying Password
+                                    </Badge>
+                                )}
+                                {passwordValidationStatus === "invalid" && (
+                                    <Badge variant="destructive" className="text-xs">
+                                        Invalid Password
+                                    </Badge>
+                                )}
+                                {passwordValidationStatus === "valid" && (
+                                    <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                                        Valid Password
+                                    </Badge>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <Input
+                                    id="password"
+                                    type={showPassword ? "text" : "password"}
+                                    value={password}
+                                    onChange={onPasswordChange}
+                                    className={cn(
+                                        passwordValidationStatus === "invalid" && "border-red-500",
+                                        passwordValidationStatus === "valid" && "border-green-500"
+                                    )}
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="h-4 w-4" />
+                                    ) : (
+                                        <Eye className="h-4 w-4" />
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="terms"
+                            checked={acceptedTerms}
+                            onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
+                        />
+                        <label htmlFor="terms" className="text-sm inline-flex items-center gap-1">
+                            I accept the Terms and Conditions
+                            <Link href="/terms" className="text-primary hover:underline inline-flex items-center gap-1">
+                                Click here to read
+                                <ArrowRight className="w-3 h-3" />
+                            </Link>
+                        </label>
+                    </div>
+
+                    {pinValidationStatus === "invalid" && (
+                        <div className="grid grid-cols-3 gap-2">
+                            <Button
+                                type="button"
+                                className="bg-primary hover:bg-primary/90"
+                                onClick={onPasswordReset}
+                            >
+                                Recover PIN using ID
+                            </Button>
+                            <Button
+                                type="button"
+                                className="bg-primary hover:bg-primary/90"
+                                onClick={onPasswordReset}
+                            >
+                                Reset Password
+                            </Button>
+                            <Button
+                                type="button"
+                                className="bg-primary hover:bg-primary/90"
+                                onClick={onPasswordEmailReset}
+                            >
+                                Reset Email + Password
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
