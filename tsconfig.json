@@ -34,7 +34,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "src/sessionManagementService.ts"
-  ],
+, "app/api/company/route.js", "app/api/individual/route.js"  ],
   "exclude": [
     "node_modules"
   ]
