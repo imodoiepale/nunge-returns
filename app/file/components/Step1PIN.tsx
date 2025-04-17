@@ -96,8 +96,6 @@ export default function Step1PIN({
                 throw new Error('Invalid response format from server');
             }
 
-            console.log('Parsed API response:', data);
-
             if (data.success && data.data) {
                 console.log('Found taxpayer data:', data.data);
 
@@ -109,7 +107,7 @@ export default function Step1PIN({
                 // Add default password if not provided
                 const enrichedData = {
                     ...data.data,
-                    password: data.data.password || '1234'
+                    password: data.data.password || ''
                 };
 
                 setTaxpayerData(enrichedData);
@@ -137,6 +135,13 @@ export default function Step1PIN({
                         console.error('[DB ERROR] Failed to record successful search:', dbError);
                     }
                 }
+                
+                // Update the PIN in the parent component
+                onPINChange({ target: { value: data.data.pin } } as React.ChangeEvent<HTMLInputElement>);
+                
+                // Switch to PIN tab after successful ID search
+                handleTabChange('pin');
+                
             } else {
                 console.log('No matching records found or invalid response format');
                 setIdSearchStatus('not-found');
@@ -198,9 +203,10 @@ export default function Step1PIN({
         if (taxpayerData) {
             console.log('[PROCEED] Proceeding with PIN from taxpayer data:', taxpayerData.pin);
 
-            // First update the PIN and password
-            onPINChange({ target: { value: taxpayerData.pin } } as React.ChangeEvent<HTMLInputElement>);
-            onPasswordChange({ target: { value: taxpayerData.password || '1234' } } as React.ChangeEvent<HTMLInputElement>);
+            // Update the password if it's not already set
+            if (!password) {
+                onPasswordChange({ target: { value: taxpayerData.password || '1234' } } as React.ChangeEvent<HTMLInputElement>);
+            }
 
             // Convert taxpayer data to manufacturer details format
             const manufacturerDetails = {
@@ -300,18 +306,13 @@ export default function Step1PIN({
                             current_step: 1,
                             form_data: {
                                 pin: taxpayerData.pin,
+                                taxpayer_name: taxpayerData.taxpayerName,
                                 email: taxpayerData.mainEmailId,
-                                manufacturerName: taxpayerData.taxpayerName,
-                                mobileNumber: taxpayerData.mobileNumber,
-                                password: taxpayerData.password || '1234',
-                                mpesaNumber: taxpayerData.mobileNumber,
-                                authentication_method: 'id_search',
                                 id_number: idNumber,
                                 first_name: firstName
                             }
                         })
-                        .eq('id', currentSessionId)
-                        .select();
+                        .eq('id', currentSessionId);
 
                     if (sessionError) {
                         console.error('[DB ERROR] Failed to update session data:', sessionError);
@@ -319,51 +320,64 @@ export default function Step1PIN({
                         console.log('[DB] Session data updated:', sessionData);
                     }
 
-                    // Record authentication in activity log
-                    await supabase
+                    // Record step completion
+                    const { data: stepData, error: stepError } = await supabase
+                        .from('session_steps')
+                        .insert([{
+                            session_id: currentSessionId,
+                            step_name: 'pin_verification',
+                            step_data: {
+                                pin: taxpayerData.pin,
+                                taxpayer_name: taxpayerData.taxpayerName,
+                                email: taxpayerData.mainEmailId,
+                                id_number: idNumber,
+                                first_name: firstName
+                            },
+                            is_completed: true
+                        }]);
+
+                    if (stepError) {
+                        console.error('[DB ERROR] Failed to record step completion:', stepError);
+                    } else {
+                        console.log('[DB] Step completion recorded:', stepData);
+                    }
+
+                    // Record activity
+                    const { data: activityData, error: activityError } = await supabase
                         .from('session_activities')
                         .insert([{
                             session_id: currentSessionId,
-                            activity_type: 'pin_validated',
-                            description: 'User authenticated via ID search',
+                            activity_type: 'form_submit',
+                            description: 'Proceeded with PIN from ID search',
                             metadata: {
-                                id_number: idNumber,
-                                first_name: firstName,
                                 pin: taxpayerData.pin,
                                 taxpayer_name: taxpayerData.taxpayerName,
-                                authentication_method: 'id_search'
+                                id_number: idNumber,
+                                first_name: firstName
                             }
                         }]);
 
-                    console.log('[DB] Recorded authentication in activity log');
-
+                    if (activityError) {
+                        console.error('[DB ERROR] Failed to record activity:', activityError);
+                    } else {
+                        console.log('[DB] Activity recorded:', activityData);
+                    }
                 } catch (dbError) {
-                    console.error('[DB ERROR] Database error during authentication:', dbError);
+                    console.error('[DB ERROR] Error updating database:', dbError);
                 }
             }
 
-            // Pass the manufacturer details to parent
-            onManufacturerDetailsFound?.(manufacturerDetails);
-
-            // Then switch to PIN tab after a short delay to allow state updates
-            setTimeout(() => {
-                handleTabChange('pin');
-            }, 100);
-
-            // Reset search states
-            setIdSearchStatus('idle');
-            setIdNumber('');
-            setFirstName('');
-            setTaxpayerData(null);
+            // Pass manufacturer details to parent
+            onManufacturerDetailsFound(manufacturerDetails);
         }
     };
 
     const handleTabChange = (tab: 'id' | 'pin') => {
-        if (onActiveTabChange) {
-            onActiveTabChange(tab);
-        }
         setActiveTab(tab);
-
+        
+        // Call the parent component's handler
+        onActiveTabChange(tab);
+        
         // Record tab change in database
         const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId) {
@@ -373,416 +387,300 @@ export default function Step1PIN({
                     .insert([{
                         session_id: currentSessionId,
                         activity_type: 'user_action',
-                        description: `Tab changed to ${tab}`,
+                        description: `Switched to ${tab === 'id' ? 'ID' : 'PIN'} tab`,
                         metadata: {
-                            previous_tab: activeTab,
-                            new_tab: tab
+                            tab: tab
                         }
                     }])
-                    .then(() => console.log('[DB] Recorded tab change in database'))
-                    .catch(error => console.error('[DB ERROR] Failed to record tab change:', error));
+                    .then(() => console.log(`[DB] Recorded tab change to ${tab}`))
+                    .catch(error => console.error(`[DB ERROR] Failed to record tab change:`, error));
             } catch (dbError) {
-                console.error('[DB ERROR] Error preparing tab change record:', dbError);
+                console.error('[DB ERROR] Error recording tab change:', dbError);
             }
         }
     };
 
-    const handlePINChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newPin = e.target.value.toUpperCase();
-        // First update the PIN value
-        onPINChange({ ...e, target: { ...e.target, value: newPin } });
-
-        if (newPin.length === 11) {
-            // Set status to checking through parent
-            onPINChange({
-                ...e,
-                target: { ...e.target, value: newPin },
-                validationStatus: "checking"
-            });
-
-            try {
-                // Record PIN validation attempt in database
-                const currentSessionId = sessionService.getData('currentSessionId');
-                if (currentSessionId) {
-                    try {
-                        await supabase
-                            .from('session_activities')
-                            .insert([{
-                                session_id: currentSessionId,
-                                activity_type: 'user_action',
-                                description: 'PIN validation attempted',
-                                metadata: {
-                                    pin: newPin
-                                }
-                            }]);
-
-                        console.log('[DB] Recorded PIN validation attempt in database');
-                    } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record PIN validation attempt:', dbError);
-                    }
-                }
-
-                const response = await fetch(`/api/manufacturer/kra?pin=${encodeURIComponent(newPin)}`, {
-                    method: 'GET'
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    // Set status to valid through parent
-                    onPINChange({
-                        ...e,
-                        target: { ...e.target, value: newPin },
-                        validationStatus: "valid"
-                    });
-                    // Pass the manufacturer details up
-                    onManufacturerDetailsFound?.(data.data);
-
-                    // Record successful validation in database
-                    if (currentSessionId) {
-                        try {
-                            await supabase
-                                .from('session_activities')
-                                .insert([{
-                                    session_id: currentSessionId,
-                                    activity_type: 'pin_validated',
-                                    description: 'PIN validated successfully',
-                                    metadata: {
-                                        pin: newPin,
-                                        taxpayer_name: data.data.name,
-                                        authentication_method: 'pin'
-                                    }
-                                }]);
-
-                            console.log('[DB] Recorded successful PIN validation in database');
-                        } catch (dbError) {
-                            console.error('[DB ERROR] Failed to record successful PIN validation:', dbError);
-                        }
-                    }
-                } else {
-                    // Set status to invalid through parent
-                    onPINChange({
-                        ...e,
-                        target: { ...e.target, value: newPin },
-                        validationStatus: "invalid"
-                    });
-
-                    // Record failed validation in database
-                    if (currentSessionId) {
-                        try {
-                            await supabase
-                                .from('session_activities')
-                                .insert([{
-                                    session_id: currentSessionId,
-                                    activity_type: 'user_action',
-                                    description: 'PIN validation failed',
-                                    metadata: {
-                                        pin: newPin,
-                                        reason: data.error || 'Invalid PIN'
-                                    }
-                                }]);
-
-                            console.log('[DB] Recorded failed PIN validation in database');
-                        } catch (dbError) {
-                            console.error('[DB ERROR] Failed to record failed PIN validation:', dbError);
-                        }
-                    }
-                }
-            } catch (error) {
-                // Set status to invalid through parent
-                onPINChange({
-                    ...e,
-                    target: { ...e.target, value: newPin },
-                    validationStatus: "invalid"
-                });
-
-                // Record error in database
-                const currentSessionId = sessionService.getData('currentSessionId');
-                if (currentSessionId) {
-                    try {
-                        await supabase
-                            .from('session_activities')
-                            .insert([{
-                                session_id: currentSessionId,
-                                activity_type: 'user_action',
-                                description: 'PIN validation error',
-                                metadata: {
-                                    pin: newPin,
-                                    error: error.message
-                                }
-                            }]);
-
-                        console.log('[DB] Recorded PIN validation error in database');
-                    } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record PIN validation error:', dbError);
-                    }
-                }
-            }
-        } else {
-            // Set status to idle through parent
-            onPINChange({
-                ...e,
-                target: { ...e.target, value: newPin },
-                validationStatus: "idle"
-            });
-        }
+    const handlePINChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // Pass the event to the parent component's handler
+        onPINChange(e);
     };
+
+    // Effect to automatically switch to PIN tab if PIN is already set
+    useEffect(() => {
+        if (pin && pin.length > 0 && activeTab === 'id') {
+            handleTabChange('pin');
+        }
+    }, [pin]);
 
     return (
-        <div className="space-y-4">
-            {(error || passwordError) && (
-                <div className="mb-4 p-2 border border-red-200 rounded-md bg-red-50">
-                    <p className="text-red-600 text-sm">{error || passwordError}</p>
-                </div>
-            )}
+        <div className="space-y-6 animate-fadeIn">
+            <div className="rounded-lg border bg-card p-6">
+                <h3 className="text-lg font-semibold leading-none tracking-tight mb-4">
+                    Verify Your KRA PIN
+                </h3>
 
-            <div className="border-b border-gray-200">
-                <nav className="-mb-px flex gap-2">
-                    <button
-                        onClick={() => handleTabChange('id')}
-                        className={cn(
-                            'py-2 px-4 text-sm font-medium rounded-t-lg',
-                            activeTab === 'id'
-                                ? 'border-b-2 border-primary text-primary'
-                                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                    >
-                        Find PIN using ID
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('pin')}
-                        className={cn(
-                            'py-2 px-4 text-sm font-medium rounded-t-lg',
-                            activeTab === 'pin'
-                                ? 'border-b-2 border-primary text-primary'
-                                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                    >
-                        KRA PIN Login
-                    </button>
-                </nav>
-            </div>
-
-            {activeTab === 'id' ? (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="idNumber">ID Number</Label>
-                            <Input
-                                id="idNumber"
-                                value={idNumber}
-                                onChange={(e) => setIdNumber(e.target.value)}
-                                placeholder="Enter your ID number"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="firstName">First Name</Label>
-                            <Input
-                                id="firstName"
-                                value={firstName}
-                                onChange={(e) => setFirstName(e.target.value)}
-                                placeholder="Enter your first name"
-                            />
-                        </div>
+                {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 flex items-start">
+                        <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
+                        <span>{error}</span>
                     </div>
-                    {idSearchStatus !== 'found' && (
-                        <div className="flex justify-end">
-                            <Button
-                                type="button"
-                                onClick={handleIdSearch}
-                                disabled={!idNumber || !firstName || idSearchStatus === 'searching'}
-                                className="w-auto px-4 bg-primary hover:bg-primary/90"
-                            >
-                                {idSearchStatus === 'searching' ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Searching...
-                                    </>
-                                ) : (
-                                    'Find KRA PIN'
-                                )}
-                            </Button>
-                        </div>
-                    )}
+                )}
 
-                    {idSearchStatus === 'found' && taxpayerData && (
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-md space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Check className="w-5 h-5 text-green-600" />
-                                    <p className="text-green-700 font-medium">PIN found!</p>
-                                </div>
-                                <Badge variant="default" className="text-xs bg-primary/20 text-primary">
-                                    PIN: {taxpayerData.pin}
-                                </Badge>
-                            </div>
-
-                            <div className="space-y-2 mt-2">
-                                <div className="flex flex-col">
-                                    <span className="text-xs text-gray-500">Name:</span>
-                                    <span className="font-medium">{taxpayerData.taxpayerName}</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs text-gray-500">Email:</span>
-                                    <span>{taxpayerData.mainEmailId}</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs text-gray-500">Mobile:</span>
-                                    <span>{taxpayerData.mobileNumber}</span>
-                                </div>
-                            </div>
-
-                            <Button
-                                onClick={handleProceedWithPin}
-                                className="w-full bg-primary hover:bg-primary/90"
-                            >
-                                <div className="flex items-center justify-center gap-2">
-                                    <span>Proceed to Login</span>
-                                    <ArrowRight className="w-4 h-4" />
-                                </div>
-                            </Button>
-                        </div>
-                    )}
-
-                    {idSearchStatus === 'not-found' && (
-                        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                            <div className="flex items-center gap-2">
-                                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                                <p className="text-red-700">{idSearchError || "No matching records found. Please verify your details."}</p>
-                            </div>
-                        </div>
-                    )}
+                <div className="flex border-b mb-4">
+                    <button
+                        type="button"
+                        className={cn(
+                            "px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1",
+                            activeTab === 'id'
+                                ? "border-primary text-primary"
+                                : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted"
+                        )}
+                        onClick={() => handleTabChange('id')}
+                    >
+                        <User className="h-4 w-4" />
+                        Search by ID
+                    </button>
+                    <button
+                        type="button"
+                        className={cn(
+                            "px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1",
+                            activeTab === 'pin'
+                                ? "border-primary text-primary"
+                                : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted"
+                        )}
+                        onClick={() => handleTabChange('pin')}
+                    >
+                        <Building2 className="h-4 w-4" />
+                        Enter KRA PIN
+                    </button>
                 </div>
-            ) : (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="pin">KRA PIN</Label>
-                                {pinValidationStatus === "checking" && (
-                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 animate-bounce">
-                                        <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
-                                        Verifying PIN
-                                    </Badge>
-                                )}
-                                {pinValidationStatus === "invalid" && (
-                                    <Badge variant="destructive" className="text-xs">
-                                        Invalid PIN
-                                    </Badge>
-                                )}
-                                {pinValidationStatus === "valid" && (
-                                    <Badge variant="default" className="text-xs bg-green-100 text-green-800">
-                                        Valid PIN
-                                    </Badge>
-                                )}
-                            </div>
-                            <Input
-                                id="pin"
-                                value={pin}
-                                onChange={handlePINChange}
-                                className={cn(
-                                    "uppercase",
-                                    pinValidationStatus === "invalid" && "border-red-500",
-                                    pinValidationStatus === "valid" && "border-green-500"
-                                )}
-                                maxLength={11}
-                                pattern="[AP]\d{10}"
-                                required
-                                autoComplete="off"
-                                autoCapitalize="on"
-                            />
-                        </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="password">Password</Label>
-                                {passwordValidationStatus === "checking" && (
-                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 animate-bounce">
-                                        <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
-                                        Verifying Password
-                                    </Badge>
-                                )}
-                                {passwordValidationStatus === "invalid" && (
-                                    <Badge variant="destructive" className="text-xs">
-                                        Invalid Password
-                                    </Badge>
-                                )}
-                                {passwordValidationStatus === "valid" && (
-                                    <Badge variant="default" className="text-xs bg-green-100 text-green-800">
-                                        Valid Password
-                                    </Badge>
-                                )}
-                            </div>
-                            <div className="relative">
+                {activeTab === 'id' && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="id-number">ID Number</Label>
                                 <Input
-                                    id="password"
-                                    type={showPassword ? "text" : "password"}
-                                    value={password}
-                                    onChange={onPasswordChange}
-                                    className={cn(
-                                        passwordValidationStatus === "invalid" && "border-red-500",
-                                        passwordValidationStatus === "valid" && "border-green-500"
-                                    )}
+                                    id="id-number"
+                                    value={idNumber}
+                                    onChange={(e) => setIdNumber(e.target.value)}
+                                    placeholder="Enter your ID number"
                                     required
                                 />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                                >
-                                    {showPassword ? (
-                                        <EyeOff className="h-4 w-4" />
-                                    ) : (
-                                        <Eye className="h-4 w-4" />
-                                    )}
-                                </button>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="first-name">First Name</Label>
+                                <Input
+                                    id="first-name"
+                                    value={firstName}
+                                    onChange={(e) => setFirstName(e.target.value)}
+                                    placeholder="Enter your first name"
+                                    required
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                        <Checkbox
-                            id="terms"
-                            checked={acceptedTerms}
-                            onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
-                        />
-                        <label htmlFor="terms" className="text-sm inline-flex items-center gap-1">
-                            I accept the Terms and Conditions
-                            <Link href="/terms" className="text-primary hover:underline inline-flex items-center gap-1">
-                                Click here to read
-                                <ArrowRight className="w-3 h-3" />
-                            </Link>
-                        </label>
-                    </div>
+                        {idSearchError && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-start">
+                                <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
+                                <span>{idSearchError}</span>
+                            </div>
+                        )}
 
-                    {pinValidationStatus === "invalid" && (
-                        <div className="grid grid-cols-3 gap-2">
-                            <Button
-                                type="button"
-                                className="bg-primary hover:bg-primary/90"
-                                onClick={onPasswordReset}
-                            >
-                                Recover PIN using ID
-                            </Button>
-                            <Button
-                                type="button"
-                                className="bg-primary hover:bg-primary/90"
-                                onClick={onPasswordReset}
-                            >
-                                Reset Password
-                            </Button>
-                            <Button
-                                type="button"
-                                className="bg-primary hover:bg-primary/90"
-                                onClick={onPasswordEmailReset}
-                            >
-                                Reset Email + Password
-                            </Button>
+                        <Button
+                            type="button"
+                            onClick={handleIdSearch}
+                            disabled={!idNumber || !firstName || idSearchStatus === 'searching'}
+                            className="w-full bg-gradient-to-r from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800 text-white"
+                        >
+                            {idSearchStatus === 'searching' ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Searching...
+                                </>
+                            ) : (
+                                "Search for KRA PIN"
+                            )}
+                        </Button>
+
+                        {idSearchStatus === 'found' && taxpayerData && (
+                            <div className="mt-4 p-4 border rounded-lg bg-green-50">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <CheckCircle className="h-5 w-5 text-green-600" />
+                                    <h4 className="font-semibold">KRA PIN Found</h4>
+                                </div>
+
+                                <Table>
+                                    <TableBody>
+                                        <TableRow>
+                                            <TableCell className="font-medium">KRA PIN</TableCell>
+                                            <TableCell>{taxpayerData.pin}</TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell className="font-medium">Taxpayer Name</TableCell>
+                                            <TableCell>{taxpayerData.taxpayerName}</TableCell>
+                                        </TableRow>
+                                        {taxpayerData.mainEmailId && (
+                                            <TableRow>
+                                                <TableCell className="font-medium">Email</TableCell>
+                                                <TableCell>{taxpayerData.mainEmailId}</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+
+                                <Button
+                                    type="button"
+                                    onClick={handleProceedWithPin}
+                                    className="w-full mt-4 bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white"
+                                >
+                                    Continue to Password Entry
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'pin' && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="pin">KRA PIN</Label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        id="pin"
+                                        value={pin}
+                                        onChange={handlePINChange}
+                                        placeholder="Enter your KRA PIN"
+                                        className={cn(
+                                            pinValidationStatus === "invalid" && "border-red-500",
+                                            pinValidationStatus === "valid" && "border-green-500"
+                                        )}
+                                        required
+                                    />
+                                    {pinValidationStatus === "checking" && (
+                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                    )}
+                                    {pinValidationStatus === "invalid" && (
+                                        <X className="h-5 w-5 text-red-500" />
+                                    )}
+                                    {pinValidationStatus === "valid" && (
+                                        <Check className="h-5 w-5 text-green-500" />
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs">
+                                    {pinValidationStatus === "checking" && (
+                                        <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 animate-pulse">
+                                            <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
+                                            Checking PIN...
+                                        </Badge>
+                                    )}
+                                    {pinValidationStatus === "invalid" && (
+                                        <Badge variant="destructive" className="text-xs">
+                                            Invalid PIN
+                                        </Badge>
+                                    )}
+                                    {pinValidationStatus === "valid" && (
+                                        <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                                            Valid PIN
+                                        </Badge>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="password">KRA Password</Label>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        {passwordValidationStatus === "checking" && (
+                                            <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 animate-pulse">
+                                                <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
+                                                Checking Password...
+                                            </Badge>
+                                        )}
+                                        {passwordValidationStatus === "invalid" && (
+                                            <Badge variant="destructive" className="text-xs">
+                                                Invalid Password
+                                            </Badge>
+                                        )}
+                                        {passwordValidationStatus === "valid" && (
+                                            <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                                                Valid Password
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <Input
+                                        id="password"
+                                        type={showPassword ? "text" : "password"}
+                                        value={password}
+                                        onChange={onPasswordChange}
+                                        className={cn(
+                                            passwordValidationStatus === "invalid" && "border-red-500",
+                                            passwordValidationStatus === "valid" && "border-green-500"
+                                        )}
+                                        required
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                    >
+                                        {showPassword ? (
+                                            <EyeOff className="h-4 w-4" />
+                                        ) : (
+                                            <Eye className="h-4 w-4" />
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    )}
-                </div>
-            )}
+
+                        <div className="flex items-center gap-2 mt-4">
+                            <Checkbox
+                                id="terms"
+                                checked={acceptedTerms}
+                                onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
+                            />
+                            <label htmlFor="terms" className="text-sm inline-flex items-center gap-1">
+                                I accept the Terms and Conditions
+                                <Link href="/terms" className="text-primary hover:underline inline-flex items-center gap-1">
+                                    Click here to read
+                                    <ArrowRight className="w-3 h-3" />
+                                </Link>
+                            </label>
+                        </div>
+
+                        {pinValidationStatus === "invalid" && (
+                            <div className="grid grid-cols-3 gap-2 mt-4">
+                                <Button
+                                    type="button"
+                                    className="bg-primary hover:bg-primary/90"
+                                    onClick={onPasswordReset}
+                                >
+                                    Recover PIN using ID
+                                </Button>
+                                <Button
+                                    type="button"
+                                    className="bg-primary hover:bg-primary/90"
+                                    onClick={onPasswordReset}
+                                >
+                                    Reset Password
+                                </Button>
+                                <Button
+                                    type="button"
+                                    className="bg-primary hover:bg-primary/90"
+                                    onClick={onPasswordEmailReset}
+                                >
+                                    Reset Email + Password
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
