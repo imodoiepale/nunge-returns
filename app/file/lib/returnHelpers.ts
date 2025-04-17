@@ -131,12 +131,30 @@ export const extractManufacturerDetails = async (pin: string) => {
   }
 }
 
+// Debounce function to prevent excessive API calls
+const debounce = <T extends (...args: any[]) => Promise<any>>(func: T, wait: number): ((...args: Parameters<T>) => void) => {
+  let timeout: NodeJS.Timeout | null = null;
+  
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      timeout = null;
+      func(...args);
+    };
+    
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(later, wait);
+  };
+};
+
 export const validatePassword = async (
   pin: string, 
   password: string,
   setPasswordValidationStatus?: (status: "idle" | "checking" | "invalid" | "valid") => void,
-  setPasswordError?: (error: string | null) => void
-): Promise<boolean> => {
+  setPasswordError?: (error: string | null) => void,
+  company_name?: string
+): Promise<{ isValid: boolean, error?: string }> => {
   try {
     if (setPasswordValidationStatus) {
       setPasswordValidationStatus("checking");
@@ -163,81 +181,128 @@ export const validatePassword = async (
       }
     }
     
-    // Temporary validation - in real implementation, call API
-    const isValid = password === "1234";
+    // Validate PIN first if company_name is not provided
+    if (!company_name) {
+      try {
+        // Call API to get taxpayer details by PIN
+        const pinResponse = await fetch(`/api/company/brs?pin=${encodeURIComponent(pin)}`, {
+          method: 'GET'
+        });
+        
+        if (!pinResponse.ok) {
+          throw new Error(`PIN validation failed with status ${pinResponse.status}`);
+        }
+        
+        const pinData = await pinResponse.json();
+        
+        if (pinData.success && pinData.data) {
+          company_name = pinData.data.taxpayerName || '';
+          console.log(`[PIN Validation] Found taxpayer name: ${company_name}`);
+        } else {
+          console.error('[PIN Validation] Failed to get taxpayer details:', pinData.message);
+        }
+      } catch (pinError) {
+        console.error('[PIN Validation] Error:', pinError);
+      }
+    }
     
-    if (isValid) {
-      if (setPasswordValidationStatus) {
-        setPasswordValidationStatus("valid");
-      }
-      if (setPasswordError) {
-        setPasswordError(null);
-      }
+    // Call the API for password validation
+    try {
+      const response = await fetch('/api/validate-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_name: company_name || '', // Company name or individual name
+          kra_pin: pin,
+          kra_password: password,
+        }),
+      });
+
+      const data = await response.json();
       
-      // Log successful validation
-      if (currentSessionId) {
-        try {
-          await supabase
-            .from('session_activities')
-            .insert([{
-              session_id: currentSessionId,
-              activity_type: 'user_action',
-              description: 'Password validated successfully',
-              metadata: {
-                pin: pin
-              }
-            }]);
-            
-          console.log('[DB] Recorded successful password validation');
-          
-          // Update session with password validation
-          await supabase
-            .from('sessions')
-            .update({
-              form_data: {
-                pin: pin,
-                password: password,
-                passwordValidated: true
-              }
-            })
-            .eq('id', currentSessionId);
-            
-          console.log('[DB] Updated session with password validation');
-        } catch (dbError) {
-          console.error('[DB ERROR] Failed to record successful password validation:', dbError);
+      if (data.success) {
+        if (setPasswordValidationStatus) {
+          setPasswordValidationStatus("valid");
         }
-      }
-      
-      return true;
-    } else {
-      if (setPasswordValidationStatus) {
-        setPasswordValidationStatus("invalid");
-      }
-      if (setPasswordError) {
-        setPasswordError("Please enter the correct password.");
-      }
-      
-      // Log failed validation
-      if (currentSessionId) {
-        try {
-          await supabase
-            .from('session_activities')
-            .insert([{
-              session_id: currentSessionId,
-              activity_type: 'user_action',
-              description: 'Password validation failed',
-              metadata: {
-                pin: pin
-              }
-            }]);
-            
-          console.log('[DB] Recorded failed password validation');
-        } catch (dbError) {
-          console.error('[DB ERROR] Failed to record failed password validation:', dbError);
+        if (setPasswordError) {
+          setPasswordError(null);
         }
+        
+        // Log successful validation
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'Password validated successfully',
+                metadata: {
+                  pin: pin,
+                  status: data.status,
+                  timestamp: data.timestamp
+                }
+              }]);
+              
+            console.log('[DB] Recorded successful password validation');
+            
+            // Update session with password validation
+            await supabase
+              .from('sessions')
+              .update({
+                form_data: {
+                  pin: pin,
+                  password: password,
+                  passwordValidated: true,
+                  company_name: data.company_name || company_name || ''
+                }
+              })
+              .eq('id', currentSessionId);
+              
+            console.log('[DB] Updated session with password validation');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record successful password validation:', dbError);
+          }
+        }
+        
+        return { isValid: true };
+      } else {
+        if (setPasswordValidationStatus) {
+          setPasswordValidationStatus("invalid");
+        }
+        if (setPasswordError) {
+          setPasswordError(data.message || "Please enter the correct password.");
+        }
+        
+        // Log failed validation
+        if (currentSessionId) {
+          try {
+            await supabase
+              .from('session_activities')
+              .insert([{
+                session_id: currentSessionId,
+                activity_type: 'user_action',
+                description: 'Password validation failed',
+                metadata: {
+                  pin: pin,
+                  message: data.message,
+                  status: data.status
+                }
+              }]);
+              
+            console.log('[DB] Recorded failed password validation');
+          } catch (dbError) {
+            console.error('[DB ERROR] Failed to record failed password validation:', dbError);
+          }
+        }
+        
+        return { isValid: false, error: data.message };
       }
-      
-      return false;
+    } catch (apiError) {
+      console.error('API error during password validation:', apiError);
+      throw apiError;
     }
   } catch (error) {
     if (setPasswordValidationStatus) {
@@ -269,9 +334,38 @@ export const validatePassword = async (
       }
     }
     
-    return false;
+    return { isValid: false, error: error.message };
   }
-}
+};
+
+// Create a debounced version of the password validation function
+export const debouncedValidatePassword = (
+  pin: string,
+  password: string,
+  setPasswordValidationStatus?: (status: "idle" | "checking" | "invalid" | "valid") => void,
+  setPasswordError?: (error: string | null) => void,
+  company_name?: string
+) => {
+  // Set status to checking immediately
+  if (setPasswordValidationStatus) {
+    setPasswordValidationStatus("checking");
+  }
+  
+  // Return a promise that will resolve with the validation result
+  return new Promise<{ isValid: boolean, error?: string }>((resolve) => {
+    const debouncedValidation = debounce(async () => {
+      try {
+        const result = await validatePassword(pin, password, setPasswordValidationStatus, setPasswordError, company_name);
+        resolve(result);
+      } catch (error) {
+        console.error('Debounced validation error:', error);
+        resolve({ isValid: false, error: error.message });
+      }
+    }, 3000); // 3 second debounce
+    
+    debouncedValidation();
+  });
+};
 
 export const fileNilReturn = async (credentials: { 
   pin: string; 

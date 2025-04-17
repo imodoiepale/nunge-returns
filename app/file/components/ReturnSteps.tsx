@@ -20,7 +20,8 @@ import {
     resetPasswordAndEmail,
     validatePIN,
     extractManufacturerDetails,
-    fileNilReturn
+    fileNilReturn,
+    debouncedValidatePassword
 } from '../lib/returnHelpers'
 
 // Import step components
@@ -259,8 +260,14 @@ export function ReturnSteps() {
                     }
                 }
 
-                // Validate password
-                const { isValid, error: validationError } = await validatePassword(formData.pin, newPassword);
+                // Validate password using debounced function
+                const { isValid, error: validationError } = await debouncedValidatePassword(
+                    formData.pin, 
+                    newPassword,
+                    setPasswordValidationStatus,
+                    setPasswordError,
+                    formData.company_name
+                );
 
                 if (isValid) {
                     setPasswordValidationStatus("valid");

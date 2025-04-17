@@ -11,15 +11,39 @@ import { createClient } from "@supabase/supabase-js";
 // Supabase client initialization
 const supabaseUrl = "https://zyszsqgdlrpnunkegipk.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp5c3pzcWdkbHJwbnVua2VnaXBrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcwODMyNzg5NCwiZXhwIjoyMDIzOTAzODk0fQ.7ICIGCpKqPMxaSLiSZ5MNMWRPqrTr5pHprM0lBaNing";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false
+  }
+});
+
+const testSupabaseConnection = async () => {
+    try {
+        const { data, error } = await supabase.from('sessions').select('count').limit(1);
+        if (error) {
+            console.error('Supabase connection test failed:', error);
+            return false;
+        }
+        console.log('Supabase connection successful');
+        return true;
+    } catch (e) {
+        console.error('Supabase connection exception:', e);
+        return false;
+    }
+}
+
+const dbConnected = await testSupabaseConnection();
+if (!dbConnected) {
+    console.warn('Database connection failed - will continue but data may not be saved');
+}
 
 // Set up directories
 const now = new Date();
 const formattedDateTime = `${now.getDate()}.${now.getMonth() + 1}.${now.getFullYear()}`;
 const downloadFolderPath = path.join(
-    os.homedir(),
-    "Downloads",
-    `KRA - INDIVIDUAL NIL RETURNS - ${formattedDateTime}`
+    process.cwd(),
+    "temp",
+    `KRA-RETURNS-${formattedDateTime}`
 );
 
 // Function to log in to KRA iTax portal
@@ -270,6 +294,7 @@ export async function POST(req) {
         // Log that we're processing this individual
         console.log("Processing individual:", name || "Unknown");
         console.log("KRA PIN:", kra_pin);
+        console.log("KRA Password:", kra_password);
         
         const individual = {
             name,
@@ -278,11 +303,19 @@ export async function POST(req) {
             email
         };
         
+
+        // Then add this before launching browser:
+console.log('System details:');
+console.log(`- Platform: ${process.platform}`);
+console.log(`- Architecture: ${process.arch}`);
+console.log(`- Node version: ${process.version}`);
+console.log(`- Download path: ${downloadFolderPath}`);
+
         // Launch browser (non-headless for UI interaction)
         const browser = await chromium.launch({
             headless: false,
-            channel: "chrome",
-            args: ['--start-maximized', '--disable-headless'],
+            // channel: "chrome",
+            args: ['--start-maximized'],
             ignoreDefaultArgs: ['--headless']
         });
         const context = await browser.newContext({

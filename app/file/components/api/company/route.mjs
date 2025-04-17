@@ -12,9 +12,9 @@ const imagePath = path.join("./KRA/ocr.png");
 const now = new Date();
 const formattedDateTime = `${now.getDate()}.${now.getMonth() + 1}.${now.getFullYear()}`;
 const downloadFolderPath = path.join(
-    os.homedir(),
-    "Downloads",
-    `KRA - PAYE NIL RETURNS - ${formattedDateTime}`
+    process.cwd(),
+    "temp",
+    `KRA-RETURNS-${formattedDateTime}`
 );
 fs.mkdir(downloadFolderPath, { recursive: true }).catch(console.error);
 

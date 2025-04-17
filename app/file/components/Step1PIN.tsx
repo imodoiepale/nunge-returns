@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, CheckCircleIcon, ExclamationTriangleIcon, X } from 'lucide-react'
+import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, AlertTriangle, X } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
@@ -107,7 +107,7 @@ export default function Step1PIN({
                 // Add default password if not provided
                 const enrichedData = {
                     ...data.data,
-                    password: data.data.password || ''
+                    password: data.data.password || '1234'
                 };
 
                 setTaxpayerData(enrichedData);
@@ -421,7 +421,7 @@ export default function Step1PIN({
 
                 {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 flex items-start">
-                        <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
+                        <AlertTriangle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
                         <span>{error}</span>
                     </div>
                 )}
@@ -483,7 +483,7 @@ export default function Step1PIN({
 
                         {idSearchError && (
                             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-start">
-                                <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
+                                <AlertTriangle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
                                 <span>{idSearchError}</span>
                             </div>
                         )}

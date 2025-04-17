@@ -57,7 +57,7 @@ export default function Step3Payment({
                 .from('session_activities')
                 .insert([{
                     session_id: currentSessionId,
-                    activity_type: 'payment_initiated',
+                    activity_type: 'form_submit',
                     description: 'Payment initiated',
                     metadata: {
                         pin: pin,
@@ -66,7 +66,10 @@ export default function Step3Payment({
                     }
                 }])
                 .then(() => console.log('[DB] Recorded payment initiation'))
-                .catch(error => console.error('[DB ERROR] Failed to record payment initiation:', error))
+                .catch(error => {
+                    console.error('[DB ERROR] Failed to record payment initiation:', error)
+                    console.log('Error details:', error.detail)
+                })
         }
         
         // Simulate payment processing
@@ -82,7 +85,7 @@ export default function Step3Payment({
                     .from('session_activities')
                     .insert([{
                         session_id: currentSessionId,
-                        activity_type: 'payment_completed',
+                        activity_type: 'form_submit',
                         description: 'Payment completed',
                         metadata: {
                             pin: pin,

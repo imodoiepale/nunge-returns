@@ -439,7 +439,11 @@ export default function FilePage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ pin: formData.pin, password: newPassword }),
+          body: JSON.stringify({ 
+            kra_pin: formData.pin, 
+            kra_password: newPassword,
+            company_name: manufacturerDetails?.name || formData.manufacturerName || ''
+          }),
         });
 
         const data = await response.json();
@@ -1277,7 +1281,7 @@ export default function FilePage() {
               <Button
                 type="button"
                 disabled={!formData.pin || !validatePIN(formData.pin).isValid || !formData.password}
-                onClick={() => validatePassword(formData.pin, formData.password)}
+                onClick={() => validatePassword(formData.pin, formData.password, undefined, undefined, manufacturerDetails?.name || formData.manufacturerName || '')}
                 className="bg-gradient-to-r from-[#5865F2] to-[#4752C4] hover:from-[#4752C4] hover:to-[#3C45A5] text-white"
               >
                 Validate Password
@@ -1319,10 +1323,17 @@ export default function FilePage() {
 
         {step === 4 && (
           <Button
-            type="submit"
-            className="animate-bounce bg-gradient-to-r from-purple-400 to-purple-700"
+            type="button"
+            onClick={() => {
+              // Find the Step4Filing component's button and trigger it
+              const filingButton = document.querySelector('.step4-filing-button');
+              if (filingButton) {
+                filingButton.click();
+              }
+            }}
+            className="bg-gradient-to-r from-green-500 to-green-700 ml-auto animate-pulse"
           >
-            File Returns
+            File Nil Returns
           </Button>
         )}
       </div>
@@ -1560,8 +1571,15 @@ export default function FilePage() {
 
                   {step === 4 && (
                     <Button
-                      type="submit"
-                      className="bg-gradient-to-r from-green-500 to-green-700 ml-auto animate-bounce"
+                      type="button"
+                      onClick={() => {
+                        // Find the Step4Filing component's button and trigger it
+                        const filingButton = document.querySelector('.step4-filing-button');
+                        if (filingButton) {
+                          filingButton.click();
+                        }
+                      }}
+                      className="bg-gradient-to-r from-green-500 to-green-700 ml-auto animate-pulse"
                     >
                       File Nil Returns
                     </Button>

@@ -291,55 +291,86 @@ export function Step4Filing({
     }
 
     const handleFileReturns = async () => {
-        setLoading(true)
-        setLocalError(null)
-        
+        setLoading(true);
+        setLocalError(null);
+
         // Record filing attempt in database
-        const currentSessionId = sessionService.getData('currentSessionId')
+        const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId) {
             try {
                 await supabase
                     .from('session_activities')
                     .insert([{
                         session_id: currentSessionId,
-                        activity_type: 'filing_initiated',
+                        activity_type: 'form_submit',
                         description: 'Filing initiated',
                         metadata: {
                             pin: pin,
                             start_time: new Date().toISOString()
                         }
-                    }])
-                console.log('[DB] Recorded filing initiation')
+                    }]);
+                console.log('[DB] Recorded filing initiation');
             } catch (error) {
-                console.error('[DB ERROR] Failed to record filing initiation:', error)
+                console.error('[DB ERROR] Failed to record filing initiation:', error);
             }
         }
-        
+
         try {
+            // Determine which API endpoint to call based on PIN type
+            const isIndividual = pin.startsWith('A');
+            const apiEndpoint = isIndividual ? '/api/individual' : '/api/company';
+
+            console.log(`[FILING] Calling ${apiEndpoint} for PIN: ${pin}`);
+            
             // Call the API to file returns
-            const response = await fetch('/api/file-returns', {
+            const response = await fetch(apiEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    pin,
-                    password,
-                    sessionId: currentSessionId
+                    kra_pin: pin,
+                    kra_password: password,
+                    name: formData?.manufacturerName || '',
+                    email: formData?.email || '',
+                    session_id: currentSessionId || '',
+                    return_id: sessionService.getData('currentReturnId') || '',
+                    company_name: formData?.manufacturerName || ''
                 }),
-            })
-            
-            const data = await response.json()
-            
+            });
+
+            // Log the complete response for debugging
+            const responseText = await response.text();
+            console.log('[FILING] Raw API response:', responseText);
+
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('[FILING] Error parsing response:', parseError);
+                throw new Error('Invalid response from server');
+            }
+
             if (data.success) {
-                // This would be handled by the parent component
-                console.log('Filing successful:', data)
+                console.log('[FILING] Filing successful:', data);
+                // Update filing status to trigger the simulation
+                setFilingStatus({
+                    loggedIn: true,
+                    filing: true,
+                    extracting: false,
+                    completed: false
+                });
+
+                // Set receipt number if available
+                if (data.receipt_number) {
+                    setReceiptNumber(data.receipt_number);
+                }
             } else {
                 // Handle error
-                const errorMessage = data.message || 'Failed to file returns'
-                setLocalError(errorMessage)
-                if (onError) onError(errorMessage)
-                
+                const errorMessage = data.error || 'Failed to file returns';
+                setLocalError(errorMessage);
+                if (onError) onError(errorMessage);
+
                 // Record error in database
                 if (currentSessionId) {
                     try {
@@ -347,25 +378,25 @@ export function Step4Filing({
                             .from('session_activities')
                             .insert([{
                                 session_id: currentSessionId,
-                                activity_type: 'filing_error',
+                                activity_type: 'form_submit',
                                 description: 'Filing failed',
                                 metadata: {
                                     pin: pin,
-                                    error: data.message || 'Failed to file returns'
+                                    error: data.error || 'Failed to file returns'
                                 }
-                            }])
-                        console.log('[DB] Recorded filing error')
+                            }]);
+                        console.log('[DB] Recorded filing error');
                     } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record filing error:', dbError)
+                        console.error('[DB ERROR] Failed to record filing error:', dbError);
                     }
                 }
             }
         } catch (error) {
             // Handle exception
-            const errorMessage = 'An error occurred while filing returns'
-            setLocalError(errorMessage)
-            if (onError) onError(errorMessage)
-            
+            const errorMessage = 'An error occurred while filing returns: ' + error.message;
+            setLocalError(errorMessage);
+            if (onError) onError(errorMessage);
+
             // Record exception in database
             if (currentSessionId) {
                 try {
@@ -373,22 +404,22 @@ export function Step4Filing({
                         .from('session_activities')
                         .insert([{
                             session_id: currentSessionId,
-                            activity_type: 'filing_error',
+                            activity_type: 'form_submit',
                             description: 'Filing exception',
                             metadata: {
                                 pin: pin,
                                 error: error.message
                             }
-                        }])
-                    console.log('[DB] Recorded filing exception')
+                        }]);
+                    console.log('[DB] Recorded filing exception');
                 } catch (dbError) {
-                    console.error('[DB ERROR] Failed to record filing exception:', dbError)
+                    console.error('[DB ERROR] Failed to record filing exception:', dbError);
                 }
             }
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }
+    };
 
     const handleDownloadReceipt = (type: string) => {
         // Record receipt download in database
@@ -687,7 +718,7 @@ export function Step4Filing({
                     <Button
                         onClick={handleFileReturns}
                         disabled={!password || loading}
-                        className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white"
+                        className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 text-white step4-filing-button"
                     >
                         {loading ? (
                             <>
