@@ -279,10 +279,11 @@ export async function POST(req) {
         };
         
         // Launch browser (non-headless for UI interaction)
-        const browser = await chromium.launch({ 
-            headless: false, 
-            // executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' 
-            channel:"chrome"
+        const browser = await chromium.launch({
+            headless: false,
+            channel: "chrome",
+            args: ['--start-maximized', '--disable-headless'],
+            ignoreDefaultArgs: ['--headless']
         });
         const context = await browser.newContext({
             viewport: { width: 1280, height: 800 },

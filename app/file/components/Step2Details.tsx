@@ -1,54 +1,69 @@
 // @ts-nocheck
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, CheckCircleIcon, ExclamationTriangleIcon, X } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import { cn } from "@/lib/utils"
-import Link from "next/link"
+import { User, Mail, Building2, MapPin, ArrowRight, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import SessionManagementService from "@/src/sessionManagementService"
-import { ManufacturerDetails, Step2Props } from "../lib/types"
+import { Step2Props } from "../lib/types"
 
 const sessionService = new SessionManagementService()
 
-export default function Step2Details({
-    loading,
-    manufacturerDetails,
-    onBack,
-    onNext
-}: Step2Props) {
-    // Record view in database
+export function Step2Details({ loading, manufacturerDetails, onBack, onNext }: Step2Props) {
+    // Record step view in database and check for existing data
     useEffect(() => {
-        const currentSessionId = sessionService.getData('currentSessionId')
+        const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId && manufacturerDetails) {
-            supabase
-                .from('session_activities')
-                .insert([{
-                    session_id: currentSessionId,
-                    activity_type: 'user_action',
-                    description: 'Viewed manufacturer details',
-                    metadata: {
-                        pin: manufacturerDetails.pin,
-                        name: manufacturerDetails.name
-                    }
-                }])
-                .then(() => console.log('[DB] Recorded details view'))
-                .catch(error => console.error('[DB ERROR] Failed to record details view:', error))
+            try {   
+                // Record the view in the database
+                supabase
+                    .from('session_activities')
+                    .insert([{
+                        session_id: currentSessionId,
+                        activity_type: 'form_submit',
+                        description: 'Viewed manufacturer details',
+                        metadata: {
+                            pin: manufacturerDetails.pin,
+                            name: manufacturerDetails.name,
+                            step: 2
+                        }
+                    }])
+                    .then(() => console.log('[DB] Recorded step 2 view in database'))
+                    .catch(error => console.error('[DB ERROR] Failed to record step 2 view:', error));
+                
+                // Check if we have previously saved step data
+                supabase
+                    .from('session_steps')
+                    .select('*')
+                    .eq('session_id', currentSessionId)
+                    .eq('step_name', 'details_confirmation')
+                    .then(({ data, error }) => {
+                        if (error) {
+                            console.error('[DB ERROR] Failed to fetch saved step data:', error);
+                            return;
+                        }
+                        
+                        if (data && data.length > 0) {
+                            console.log('[DB] Found previously saved step data:', data[0]);
+                            // We don't need to do anything here as the parent component already has the manufacturerDetails
+                            // This is just for logging purposes
+                        }
+                    });
+            } catch (dbError) {
+                console.error('[DB ERROR] Error preparing step 2 record:', dbError);
+            }
         }
-    }, [manufacturerDetails])
+    }, [manufacturerDetails]);
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="mt-4 text-sm text-muted-foreground">Loading manufacturer details...</p>
+            <div className="flex items-center justify-center p-4">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+                    <p className="text-sm text-black">Fetching manufacturer details...</p>
+                </div>
             </div>
         )
     }
@@ -64,57 +79,181 @@ export default function Step2Details({
         )
     }
 
-    return (
-        <div className="space-y-6">
-            <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
-                <div className="p-6">
-                    <h3 className="text-lg font-semibold leading-none tracking-tight mb-4 flex items-center">
-                        <Building2 className="mr-2 h-5 w-5 text-primary" />
-                        Taxpayer Details
-                    </h3>
+    const isIndividual = manufacturerDetails.pin.startsWith('A')
 
-                    <Table>
-                        <TableBody>
-                            <TableRow>
-                                <TableCell className="font-medium">KRA PIN</TableCell>
-                                <TableCell>{manufacturerDetails.pin}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell className="font-medium">Name</TableCell>
-                                <TableCell>{manufacturerDetails.name}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell className="font-medium">Email</TableCell>
-                                <TableCell>{manufacturerDetails.contactDetails?.email || 'N/A'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell className="font-medium">Mobile</TableCell>
-                                <TableCell>{manufacturerDetails.contactDetails?.mobile || 'N/A'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell className="font-medium">Registration Number</TableCell>
-                                <TableCell>{manufacturerDetails.businessDetails?.registrationNumber || 'N/A'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell className="font-medium">Registration Date</TableCell>
-                                <TableCell>{manufacturerDetails.businessDetails?.registrationDate || 'N/A'}</TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell className="font-medium">Postal Address</TableCell>
-                                <TableCell>
-                                    {manufacturerDetails.postalAddress ? 
-                                        `P.O. Box ${manufacturerDetails.postalAddress.poBox}, ${manufacturerDetails.postalAddress.town}, ${manufacturerDetails.postalAddress.postalCode}` 
-                                        : 'N/A'}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow>
-                                <TableCell className="font-medium">Physical Address</TableCell>
-                                <TableCell>{manufacturerDetails.physicalAddress?.descriptive || 'N/A'}</TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+    const handleConfirm = () => {
+        // Record step completion in database
+        const currentSessionId = sessionService.getData('currentSessionId');
+        if (currentSessionId) {
+            try {
+                // Save the manufacturer details to session_steps for persistence
+                supabase
+                    .from('session_steps')
+                    .upsert([{  // Using upsert instead of insert to update if exists
+                        session_id: currentSessionId,
+                        step_name: 'details_confirmation',
+                        step_data: manufacturerDetails,
+                        is_completed: true,
+                        completed_at: new Date().toISOString()
+                    }], { 
+                        onConflict: 'session_id,step_name' 
+                    })
+                    .then(() => console.log('[DB] Recorded step 2 completion in database'))
+                    .catch(error => console.error('[DB ERROR] Failed to record step 2 completion:', error));
+
+                supabase
+                    .from('session_activities')
+                    .insert([{
+                        session_id: currentSessionId,
+                        activity_type: 'form_submit',
+                        description: 'Confirmed manufacturer details',
+                        metadata: {
+                            pin: manufacturerDetails.pin,
+                            name: manufacturerDetails.name,
+                            step: 2
+                        }
+                    }])
+                    .then(() => console.log('[DB] Recorded confirmation activity in database'))
+                    .catch(error => console.error('[DB ERROR] Failed to record confirmation activity:', error));
+
+                // Update session step
+                supabase
+                    .from('sessions')
+                    .update({
+                        current_step: 3,
+                        last_activity: new Date().toISOString()
+                    })
+                    .eq('id', currentSessionId)
+                    .then(() => console.log('[DB] Updated session to step 3'))
+                    .catch(error => console.error('[DB ERROR] Failed to update session step:', error));
+            } catch (dbError) {
+                console.error('[DB ERROR] Error preparing step 2 completion records:', dbError);
+            }
+        }
+
+        onNext();
+    };
+
+    // Changed from form to div
+    return (
+        <div className="space-y-3">
+            <div className="p-4 rounded-lg border border-gray-200 bg-white/80 relative scale-95">
+                {/* PIN Badge */}
+                <div className="absolute top-2 right-2">
+                    <div className="flex items-center gap-1 bg-primary/10 rounded-full px-3 py-1 border border-primary/20">
+                        <Badge variant="outline" className="text-xs text-black flex items-center gap-1">
+                            {isIndividual ? (
+                                <>
+                                    <User className="w-3 h-3" />
+                                    Individual
+                                </>
+                            ) : (
+                                <>
+                                    <Building2 className="w-3 h-3" />
+                                    Company
+                                </>
+                            )}
+                        </Badge>
+                    </div>
+                </div>
+
+                <div className="space-y-3 mt-6">
+                    {/* Personal Information */}
+                    <div>
+                        <h3 className="text-sm font-medium text-black mb-2 flex items-center gap-1">
+                            <User className="w-4 h-4" />
+                            Basic Information
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                <span className="text-xs text-gray-600">PIN</span>
+                                <p className="text-sm text-black font-medium">{manufacturerDetails.pin}</p>
+                            </div>
+                            <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                <span className="text-xs text-gray-600">Name</span>
+                                <p className="text-sm text-black font-medium">{manufacturerDetails.name}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Contact Information */}
+                    <div>
+                        <h3 className="text-sm font-medium text-black mb-2 flex items-center gap-1">
+                            <Mail className="w-4 h-4" />
+                            Contact Information
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                <span className="text-xs text-gray-600">Mobile</span>
+                                <p className="text-sm text-black font-medium">
+                                    {manufacturerDetails.contactDetails?.mobile || 'N/A'}
+                                </p>
+                            </div>
+                            <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                <span className="text-xs text-gray-600">Email</span>
+                                <p className="text-sm text-black font-medium">
+                                    {manufacturerDetails.contactDetails?.email || 'N/A'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Business Information */}
+                    {!isIndividual && manufacturerDetails.businessDetails && (
+                        <div>
+                            <h3 className="text-sm font-medium text-black mb-2 flex items-center gap-1">
+                                <Building2 className="w-4 h-4" />
+                                Business Information
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                    <span className="text-xs text-gray-600">Business Name</span>
+                                    <p className="text-sm text-black font-medium">
+                                        {manufacturerDetails.businessDetails?.name || manufacturerDetails.name}
+                                    </p>
+                                </div>
+                                <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                    <span className="text-xs text-gray-600">Registration Number</span>
+                                    <p className="text-sm text-black font-medium">
+                                        {manufacturerDetails.businessDetails?.registrationNumber || 'N/A'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Address Information */}
+                    <div>
+                        <h3 className="text-sm font-medium text-black mb-2 flex items-center gap-1">
+                            <MapPin className="w-4 h-4" />
+                            Address Information
+                        </h3>
+                        <div className="space-y-2">
+                            {manufacturerDetails.postalAddress && (
+                                <div className="p-2 bg-gray-50 rounded-md">
+                                    <span className="text-xs text-gray-600">Postal Address</span>
+                                    <p className="text-sm text-black font-medium">
+                                        {`P.O. Box ${manufacturerDetails.postalAddress.poBox || ''}-${manufacturerDetails.postalAddress.postalCode || ''}, ${manufacturerDetails.postalAddress.town || ''}`}
+                                    </p>
+                                </div>
+                            )}
+                            {manufacturerDetails.physicalAddress && (
+                                <div className="p-2 bg-gray-50 rounded-md">
+                                    <span className="text-xs text-gray-600">Physical Address</span>
+                                    <p className="text-sm text-black font-medium">
+                                        {manufacturerDetails.physicalAddress.descriptive || 'N/A'}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* Single navigation section with personalized buttons */}
+
         </div>
     )
 }
+
+export default Step2Details;

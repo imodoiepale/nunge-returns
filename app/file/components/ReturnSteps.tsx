@@ -118,82 +118,68 @@ export function ReturnSteps() {
         if (newPin.length === 11) {
             setPinValidationStatus("checking");
 
-            // Record PIN validation attempt in database
-            const currentSessionId = sessionService.getData('currentSessionId');
-            if (currentSessionId) {
-                try {
-                    await supabase
-                        .from('session_activities')
-                        .insert([{
-                            session_id: currentSessionId,
-                            activity_type: 'user_action',
-                            description: 'PIN validation attempted',
-                            metadata: {
-                                pin: newPin
-                            }
-                        }]);
-
-                    console.log('[DB] Recorded PIN validation attempt');
-                } catch (dbError) {
-                    console.error('[DB ERROR] Failed to record PIN validation attempt:', dbError);
-                }
-            }
-
             try {
-                const response = await fetch(`/api/manufacturer/kra?pin=${encodeURIComponent(newPin)}`, {
-                    method: 'GET'
-                });
-                const data = await response.json();
+                // Record PIN validation attempt in database
+                const currentSessionId = sessionService.getData('currentSessionId');
+                if (currentSessionId) {
+                    try {
+                        await supabase
+                            .from('session_activities')
+                            .insert([{
+                                session_id: currentSessionId,
+                                activity_type: 'user_action',
+                                description: 'PIN validation attempted',
+                                metadata: {
+                                    pin: newPin
+                                }
+                            }]);
+                        console.log('[DB] Recorded PIN validation attempt');
+                    } catch (dbError) {
+                        console.error('[DB ERROR] Error recording PIN validation attempt:', dbError);
+                    }
+                }
 
-                if (data.success) {
+                // Validate PIN
+                const { isValid, details, error: validationError } = await validatePIN(newPin);
+
+                if (isValid) {
                     setPinValidationStatus("valid");
-                    setManufacturerDetails(data.data);
+                    setError(null);
 
-                    // Record successful validation in database
+                    // Extract manufacturer details
+                    const manufacturerInfo = extractManufacturerDetails(details);
+                    setManufacturerDetails(manufacturerInfo);
+                    setFormData(prev => ({
+                        ...prev,
+                        manufacturerName: manufacturerInfo.name,
+                        email: manufacturerInfo.contactDetails?.email || '',
+                        mobileNumber: manufacturerInfo.contactDetails?.mobile || ''
+                    }));
+
+                    // Record successful PIN validation in database
                     if (currentSessionId) {
                         try {
                             await supabase
                                 .from('session_activities')
                                 .insert([{
                                     session_id: currentSessionId,
-                                    activity_type: 'pin_validated',
+                                    activity_type: 'user_action',
                                     description: 'PIN validated successfully',
                                     metadata: {
                                         pin: newPin,
-                                        taxpayer_name: data.data.name
+                                        name: manufacturerInfo.name
                                     }
                                 }]);
-
                             console.log('[DB] Recorded successful PIN validation');
-
-                            // Update session with PIN and manufacturer details
-                            await supabase
-                                .from('sessions')
-                                .update({
-                                    pin: newPin,
-                                    name: data.data.name,
-                                    email: data.data.contactDetails?.email,
-                                    form_data: {
-                                        ...formData,
-                                        pin: newPin,
-                                        manufacturerName: data.data.name,
-                                        email: data.data.contactDetails?.email,
-                                        mobileNumber: data.data.contactDetails?.mobile,
-                                        authentication_method: 'pin'
-                                    },
-                                    last_activity: new Date().toISOString()
-                                })
-                                .eq('id', currentSessionId);
-
-                            console.log('[DB] Updated session with PIN and manufacturer details');
                         } catch (dbError) {
-                            console.error('[DB ERROR] Failed to record successful PIN validation:', dbError);
+                            console.error('[DB ERROR] Error recording successful PIN validation:', dbError);
                         }
                     }
                 } else {
                     setPinValidationStatus("invalid");
+                    setError(validationError || "Invalid PIN. Please check and try again.");
 
-                    // Record failed validation in database
+                    // Record failed PIN validation in database
                     if (currentSessionId) {
                         try {
                             await supabase
@@ -204,20 +190,56 @@ export function ReturnSteps() {
                                     description: 'PIN validation failed',
                                     metadata: {
                                         pin: newPin,
-                                        reason: data.error || 'Invalid PIN'
+                                        error: validationError || "Invalid PIN"
                                     }
                                 }]);
-
                             console.log('[DB] Recorded failed PIN validation');
                         } catch (dbError) {
-                            console.error('[DB ERROR] Failed to record failed PIN validation:', dbError);
+                            console.error('[DB ERROR] Error recording failed PIN validation:', dbError);
                         }
                     }
                 }
             } catch (error) {
                 setPinValidationStatus("invalid");
+                setError("Error validating PIN. Please try again.");
+                console.error('[APP ERROR] PIN validation error:', error);
 
-                // Record error in database
+                // Record PIN validation error in database
+                const currentSessionId = sessionService.getData('currentSessionId');
+                if (currentSessionId) {
+                    try {
+                        await supabase
+                            .from('session_activities')
+                            .insert([{
+                                session_id: currentSessionId,
+                                activity_type: 'error',
+                                description: 'PIN validation error',
+                                metadata: {
+                                    pin: newPin,
+                                    error: error.message || "Unknown error"
+                                }
+                            }]);
+                        console.log('[DB] Recorded PIN validation error');
+                    } catch (dbError) {
+                        console.error('[DB ERROR] Error recording PIN validation error:', dbError);
+                    }
+                }
+            }
+        } else {
+            setPinValidationStatus("idle");
+            setError(null);
+        }
+    };
+
+    const handlePasswordChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newPassword = e.target.value;
+        setFormData(prev => ({ ...prev, password: newPassword }));
+
+        if (newPassword.length > 0) {
+            setPasswordValidationStatus("checking");
+
+            try {
+                // Record password validation attempt in database
                 const currentSessionId = sessionService.getData('currentSessionId');
                 if (currentSessionId) {
                     try {
@@ -226,76 +248,25 @@ export function ReturnSteps() {
                             .insert([{
                                 session_id: currentSessionId,
                                 activity_type: 'user_action',
-                                description: 'PIN validation error',
+                                description: 'Password validation attempted',
                                 metadata: {
-                                    pin: newPin,
-                                    error: error.message
+                                    pin: formData.pin
                                 }
                             }]);
-
-                        console.log('[DB] Recorded PIN validation error');
+                        console.log('[DB] Recorded password validation attempt');
                     } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record PIN validation error:', dbError);
+                        console.error('[DB ERROR] Error recording password validation attempt:', dbError);
                     }
                 }
-            }
-        } else {
-            setPinValidationStatus("idle");
-        }
-    };
 
-    const handlePasswordChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newPassword = e.target.value;
-        setFormData(prev => ({ ...prev, password: newPassword }));
+                // Validate password
+                const { isValid, error: validationError } = await validatePassword(formData.pin, newPassword);
 
-        // Reset validation if password is empty
-        if (!newPassword) {
-            setPasswordValidationStatus("idle");
-            setPasswordError(null);
-            return;
-        }
-
-        // Only validate if we have a valid PIN
-        if (formData.pin && pinValidationStatus === "valid") {
-            setPasswordValidationStatus("checking");
-
-            // Record password validation attempt in database
-            const currentSessionId = sessionService.getData('currentSessionId');
-            if (currentSessionId) {
-                try {
-                    await supabase
-                        .from('session_activities')
-                        .insert([{
-                            session_id: currentSessionId,
-                            activity_type: 'user_action',
-                            description: 'Password validation attempted',
-                            metadata: {
-                                pin: formData.pin
-                            }
-                        }]);
-
-                    console.log('[DB] Recorded password validation attempt');
-                } catch (dbError) {
-                    console.error('[DB ERROR] Failed to record password validation attempt:', dbError);
-                }
-            }
-
-            try {
-                const response = await fetch('/api/validate-password', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ pin: formData.pin, password: newPassword }),
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
+                if (isValid) {
                     setPasswordValidationStatus("valid");
                     setPasswordError(null);
 
-                    // Record successful validation in database
+                    // Record successful password validation in database
                     if (currentSessionId) {
                         try {
                             await supabase
@@ -308,32 +279,16 @@ export function ReturnSteps() {
                                         pin: formData.pin
                                     }
                                 }]);
-
                             console.log('[DB] Recorded successful password validation');
-
-                            // Update session with password validation
-                            await supabase
-                                .from('sessions')
-                                .update({
-                                    form_data: {
-                                        ...formData,
-                                        password: newPassword,
-                                        passwordValidated: true
-                                    },
-                                    last_activity: new Date().toISOString()
-                                })
-                                .eq('id', currentSessionId);
-
-                            console.log('[DB] Updated session with password validation');
                         } catch (dbError) {
-                            console.error('[DB ERROR] Failed to record successful password validation:', dbError);
+                            console.error('[DB ERROR] Error recording successful password validation:', dbError);
                         }
                     }
                 } else {
                     setPasswordValidationStatus("invalid");
-                    setPasswordError(data.message || "Invalid password");
+                    setPasswordError(validationError || "Invalid password. Please check and try again.");
 
-                    // Record failed validation in database
+                    // Record failed password validation in database
                     if (currentSessionId) {
                         try {
                             await supabase
@@ -344,21 +299,21 @@ export function ReturnSteps() {
                                     description: 'Password validation failed',
                                     metadata: {
                                         pin: formData.pin,
-                                        reason: data.message || "Invalid password"
+                                        error: validationError || "Invalid password"
                                     }
                                 }]);
-
                             console.log('[DB] Recorded failed password validation');
                         } catch (dbError) {
-                            console.error('[DB ERROR] Failed to record failed password validation:', dbError);
+                            console.error('[DB ERROR] Error recording failed password validation:', dbError);
                         }
                     }
                 }
             } catch (error) {
                 setPasswordValidationStatus("invalid");
-                setPasswordError("Error validating password");
+                setPasswordError("Error validating password. Please try again.");
+                console.error('[APP ERROR] Password validation error:', error);
 
-                // Record error in database
+                // Record password validation error in database
                 const currentSessionId = sessionService.getData('currentSessionId');
                 if (currentSessionId) {
                     try {
@@ -366,24 +321,29 @@ export function ReturnSteps() {
                             .from('session_activities')
                             .insert([{
                                 session_id: currentSessionId,
-                                activity_type: 'user_action',
+                                activity_type: 'error',
                                 description: 'Password validation error',
                                 metadata: {
                                     pin: formData.pin,
-                                    error: error.message
+                                    error: error.message || "Unknown error"
                                 }
                             }]);
-
                         console.log('[DB] Recorded password validation error');
                     } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record password validation error:', dbError);
+                        console.error('[DB ERROR] Error recording password validation error:', dbError);
                     }
                 }
             }
+        } else {
+            setPasswordValidationStatus("idle");
+            setPasswordError(null);
         }
     };
 
     const handlePasswordReset = async () => {
+        setLoading(true);
+        setError(null);
+
         try {
             // Record password reset attempt in database
             const currentSessionId = sessionService.getData('currentSessionId');
@@ -394,24 +354,24 @@ export function ReturnSteps() {
                         .insert([{
                             session_id: currentSessionId,
                             activity_type: 'user_action',
-                            description: 'Password reset requested',
+                            description: 'Password reset attempted',
                             metadata: {
                                 pin: formData.pin
                             }
                         }]);
-
-                    console.log('[DB] Recorded password reset request');
+                    console.log('[DB] Recorded password reset attempt');
                 } catch (dbError) {
-                    console.error('[DB ERROR] Failed to record password reset request:', dbError);
+                    console.error('[DB ERROR] Error recording password reset attempt:', dbError);
                 }
             }
 
-            const success = await resetPassword(formData.pin);
+            // Reset password
+            const { success, error: resetError } = await resetPassword(formData.pin);
 
             if (success) {
-                alert("Password reset instructions have been sent to your registered mobile number.");
+                setError("Password reset instructions sent to your registered email.");
 
-                // Record successful reset request in database
+                // Record successful password reset in database
                 if (currentSessionId) {
                     try {
                         await supabase
@@ -419,21 +379,20 @@ export function ReturnSteps() {
                             .insert([{
                                 session_id: currentSessionId,
                                 activity_type: 'user_action',
-                                description: 'Password reset initiated successfully',
+                                description: 'Password reset successful',
                                 metadata: {
                                     pin: formData.pin
                                 }
                             }]);
-
-                        console.log('[DB] Recorded successful password reset initiation');
+                        console.log('[DB] Recorded successful password reset');
                     } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record successful password reset initiation:', dbError);
+                        console.error('[DB ERROR] Error recording successful password reset:', dbError);
                     }
                 }
             } else {
-                alert("Failed to initiate password reset. Please try again.");
+                setError(resetError || "Failed to reset password. Please try again.");
 
-                // Record failed reset request in database
+                // Record failed password reset in database
                 if (currentSessionId) {
                     try {
                         await supabase
@@ -441,23 +400,23 @@ export function ReturnSteps() {
                             .insert([{
                                 session_id: currentSessionId,
                                 activity_type: 'user_action',
-                                description: 'Password reset initiation failed',
+                                description: 'Password reset failed',
                                 metadata: {
-                                    pin: formData.pin
+                                    pin: formData.pin,
+                                    error: resetError || "Failed to reset password"
                                 }
                             }]);
-
-                        console.log('[DB] Recorded failed password reset initiation');
+                        console.log('[DB] Recorded failed password reset');
                     } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record failed password reset initiation:', dbError);
+                        console.error('[DB ERROR] Error recording failed password reset:', dbError);
                     }
                 }
             }
         } catch (error) {
-            console.error('Error during password reset:', error);
-            alert("An error occurred during password reset. Please try again.");
+            setError("An error occurred while resetting password. Please try again.");
+            console.error('[APP ERROR] Password reset error:', error);
 
-            // Record error in database
+            // Record password reset error in database
             const currentSessionId = sessionService.getData('currentSessionId');
             if (currentSessionId) {
                 try {
@@ -465,25 +424,29 @@ export function ReturnSteps() {
                         .from('session_activities')
                         .insert([{
                             session_id: currentSessionId,
-                            activity_type: 'user_action',
+                            activity_type: 'error',
                             description: 'Password reset error',
                             metadata: {
                                 pin: formData.pin,
-                                error: error.message
+                                error: error.message || "Unknown error"
                             }
                         }]);
-
                     console.log('[DB] Recorded password reset error');
                 } catch (dbError) {
-                    console.error('[DB ERROR] Failed to record password reset error:', dbError);
+                    console.error('[DB ERROR] Error recording password reset error:', dbError);
                 }
             }
+        } finally {
+            setLoading(false);
         }
     };
 
     const handlePasswordEmailReset = async () => {
+        setLoading(true);
+        setError(null);
+
         try {
-            // Record password+email reset attempt in database
+            // Record password and email reset attempt in database
             const currentSessionId = sessionService.getData('currentSessionId');
             if (currentSessionId) {
                 try {
@@ -492,24 +455,24 @@ export function ReturnSteps() {
                         .insert([{
                             session_id: currentSessionId,
                             activity_type: 'user_action',
-                            description: 'Password and email reset requested',
+                            description: 'Password and email reset attempted',
                             metadata: {
                                 pin: formData.pin
                             }
                         }]);
-
-                    console.log('[DB] Recorded password and email reset request');
+                    console.log('[DB] Recorded password and email reset attempt');
                 } catch (dbError) {
-                    console.error('[DB ERROR] Failed to record password and email reset request:', dbError);
+                    console.error('[DB ERROR] Error recording password and email reset attempt:', dbError);
                 }
             }
 
-            const success = await resetPasswordAndEmail(formData.pin);
+            // Reset password and email
+            const { success, error: resetError } = await resetPasswordAndEmail(formData.pin);
 
             if (success) {
-                alert("Password and email reset instructions have been sent to your registered mobile number.");
+                setError("Password and email reset instructions sent to your registered mobile number.");
 
-                // Record successful reset request in database
+                // Record successful password and email reset in database
                 if (currentSessionId) {
                     try {
                         await supabase
@@ -517,21 +480,20 @@ export function ReturnSteps() {
                             .insert([{
                                 session_id: currentSessionId,
                                 activity_type: 'user_action',
-                                description: 'Password and email reset initiated successfully',
+                                description: 'Password and email reset successful',
                                 metadata: {
                                     pin: formData.pin
                                 }
                             }]);
-
-                        console.log('[DB] Recorded successful password and email reset initiation');
+                        console.log('[DB] Recorded successful password and email reset');
                     } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record successful password and email reset initiation:', dbError);
+                        console.error('[DB ERROR] Error recording successful password and email reset:', dbError);
                     }
                 }
             } else {
-                alert("Failed to initiate reset. Please try again.");
+                setError(resetError || "Failed to reset password and email. Please try again.");
 
-                // Record failed reset request in database
+                // Record failed password and email reset in database
                 if (currentSessionId) {
                     try {
                         await supabase
@@ -539,23 +501,23 @@ export function ReturnSteps() {
                             .insert([{
                                 session_id: currentSessionId,
                                 activity_type: 'user_action',
-                                description: 'Password and email reset initiation failed',
+                                description: 'Password and email reset failed',
                                 metadata: {
-                                    pin: formData.pin
+                                    pin: formData.pin,
+                                    error: resetError || "Failed to reset password and email"
                                 }
                             }]);
-
-                        console.log('[DB] Recorded failed password and email reset initiation');
+                        console.log('[DB] Recorded failed password and email reset');
                     } catch (dbError) {
-                        console.error('[DB ERROR] Failed to record failed password and email reset initiation:', dbError);
+                        console.error('[DB ERROR] Error recording failed password and email reset:', dbError);
                     }
                 }
             }
         } catch (error) {
-            console.error('Error during password and email reset:', error);
-            alert("An error occurred during reset. Please try again.");
+            setError("An error occurred while resetting password and email. Please try again.");
+            console.error('[APP ERROR] Password and email reset error:', error);
 
-            // Record error in database
+            // Record password and email reset error in database
             const currentSessionId = sessionService.getData('currentSessionId');
             if (currentSessionId) {
                 try {
@@ -563,27 +525,25 @@ export function ReturnSteps() {
                         .from('session_activities')
                         .insert([{
                             session_id: currentSessionId,
-                            activity_type: 'user_action',
+                            activity_type: 'error',
                             description: 'Password and email reset error',
                             metadata: {
                                 pin: formData.pin,
-                                error: error.message
+                                error: error.message || "Unknown error"
                             }
                         }]);
-
                     console.log('[DB] Recorded password and email reset error');
                 } catch (dbError) {
-                    console.error('[DB ERROR] Failed to record password and email reset error:', dbError);
+                    console.error('[DB ERROR] Error recording password and email reset error:', dbError);
                 }
             }
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleActiveTabChange = (tab: 'id' | 'pin') => {
         setFormData(prev => ({ ...prev, activeTab: tab }));
-        // Reset validation states when switching tabs
-        setPasswordValidationStatus("idle");
-        setPasswordError(null);
 
         // Record tab change in database
         const currentSessionId = sessionService.getData('currentSessionId');
@@ -594,7 +554,7 @@ export function ReturnSteps() {
                     .insert([{
                         session_id: currentSessionId,
                         activity_type: 'user_action',
-                        description: `Tab changed to ${tab}`,
+                        description: 'Changed active tab',
                         metadata: {
                             previous_tab: formData.activeTab,
                             new_tab: tab
@@ -611,24 +571,24 @@ export function ReturnSteps() {
     const handleMpesaNumberChange = (value: string) => {
         setFormData(prev => ({ ...prev, mpesaNumber: value }));
 
-        // Record mpesa number change in database
+        // Record Mpesa number change in database
         const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId) {
             try {
                 supabase
-                    .from('sessions')
-                    .update({
-                        form_data: {
-                            ...formData,
-                            mpesaNumber: value
-                        },
-                        last_activity: new Date().toISOString()
-                    })
-                    .eq('id', currentSessionId)
-                    .then(() => console.log('[DB] Updated session with mpesa number'))
-                    .catch(error => console.error('[DB ERROR] Failed to update session with mpesa number:', error));
+                    .from('session_activities')
+                    .insert([{
+                        session_id: currentSessionId,
+                        activity_type: 'user_action',
+                        description: 'Updated Mpesa number',
+                        metadata: {
+                            mpesa_number: value
+                        }
+                    }])
+                    .then(() => console.log('[DB] Recorded Mpesa number update'))
+                    .catch(error => console.error('[DB ERROR] Failed to record Mpesa number update:', error));
             } catch (dbError) {
-                console.error('[DB ERROR] Error updating session with mpesa number:', dbError);
+                console.error('[DB ERROR] Error recording Mpesa number update:', dbError);
             }
         }
     };
@@ -647,8 +607,8 @@ export function ReturnSteps() {
                         activity_type: 'payment_status_changed',
                         description: `Payment status changed to ${status}`,
                         metadata: {
-                            previous_status: paymentStatus,
-                            new_status: status
+                            payment_status: status,
+                            mpesa_number: formData.mpesaNumber
                         }
                     }])
                     .then(() => console.log('[DB] Recorded payment status change'))
@@ -657,45 +617,12 @@ export function ReturnSteps() {
                 console.error('[DB ERROR] Error recording payment status change:', dbError);
             }
         }
-
-        if (status === "Paid") {
-            setTimeout(() => {
-                const newReceiptNumber = `NR${Math.floor(Math.random() * 1000000)}`;
-                setReceiptNumber(newReceiptNumber);
-
-                // Record receipt generation in database
-                if (currentSessionId) {
-                    try {
-                        supabase
-                            .from('session_activities')
-                            .insert([{
-                                session_id: currentSessionId,
-                                activity_type: 'receipt_generated',
-                                description: 'Payment receipt generated',
-                                metadata: {
-                                    receipt_number: newReceiptNumber,
-                                    pin: formData.pin
-                                }
-                            }])
-                            .then(() => console.log('[DB] Recorded receipt generation'))
-                            .catch(error => console.error('[DB ERROR] Failed to record receipt generation:', error));
-                    } catch (dbError) {
-                        console.error('[DB ERROR] Error recording receipt generation:', dbError);
-                    }
-                }
-            }, 500);
-        }
     };
 
     const handleDownloadReceipt = (type: string) => {
-        const link = document.createElement('a');
-        link.href = '/sample-receipt.pdf';
-        link.download = `${manufacturerDetails?.name || 'UNKNOWN'}_${formData.pin}_${type}_RECEIPT.PDF`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        console.log(`Downloading ${type} receipt...`);
 
-        // Record download activity in database
+        // Record receipt download in database
         const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId) {
             try {
@@ -703,54 +630,36 @@ export function ReturnSteps() {
                     .from('session_activities')
                     .insert([{
                         session_id: currentSessionId,
-                        activity_type: 'document_downloaded',
+                        activity_type: 'user_action',
                         description: `Downloaded ${type} receipt`,
                         metadata: {
                             receipt_type: type,
                             pin: formData.pin
                         }
                     }])
-                    .then(() => console.log(`[DB] Recorded ${type} receipt download`))
-                    .catch(error => console.error(`[DB ERROR] Failed to record ${type} receipt download:`, error));
+                    .then(() => console.log('[DB] Recorded receipt download'))
+                    .catch(error => console.error('[DB ERROR] Failed to record receipt download:', error));
             } catch (dbError) {
                 console.error('[DB ERROR] Error recording receipt download:', dbError);
             }
         }
-
-        console.log(`Downloaded ${type} receipt for PIN: ${formData.pin}`);
-
-        // If downloading "all" receipts, redirect to home after a delay
-        if (type === 'all') {
-            setTimeout(() => {
-                router.push('/');
-            }, 2000);
-        }
     };
 
     const handleEndSession = () => {
+        console.log('Ending session...');
+
         // Record session end in database
         const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId) {
             try {
                 supabase
-                    .from('sessions')
-                    .update({
-                        status: 'completed',
-                        completed_at: new Date().toISOString(),
-                        last_activity: new Date().toISOString()
-                    })
-                    .eq('id', currentSessionId)
-                    .then(() => console.log('[DB] Updated session to completed status'))
-                    .catch(error => console.error('[DB ERROR] Failed to update session status:', error));
-
-                supabase
                     .from('session_activities')
                     .insert([{
                         session_id: currentSessionId,
-                        activity_type: 'session_ended',
-                        description: 'Session ended by user',
+                        activity_type: 'user_action',
+                        description: 'Ended session',
                         metadata: {
-                            end_time: new Date().toISOString()
+                            pin: formData.pin
                         }
                     }])
                     .then(() => console.log('[DB] Recorded session end'))
@@ -760,12 +669,24 @@ export function ReturnSteps() {
             }
         }
 
+        // Redirect to home page
         router.push('/');
     };
 
     const handleNextStep = () => {
         setCurrentStep(prev => {
-            const newStep = prev + 1;
+            const newStep = Math.min(4, prev + 1);
+
+            // If moving to step 4, set filing status to logged in
+            if (newStep === 4) {
+                setSessionStartTime(new Date());
+                setFilingStatus({
+                    loggedIn: true,
+                    filing: true,
+                    extracting: false,
+                    completed: false
+                });
+            }
 
             // Record step change in database
             const currentSessionId = sessionService.getData('currentSessionId');
@@ -902,32 +823,34 @@ export function ReturnSteps() {
                 />
             )}
 
-            {/* Navigation buttons */}
-            <div className="flex justify-between mt-4">
-                {currentStep > 1 && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePreviousStep}
-                    >
-                        Back
-                    </Button>
-                )}
+            {/* Navigation buttons - Only show for steps 1-3, not for step 4 */}
+            {currentStep < 4 && (
+                <div className="flex justify-between mt-4">
+                    {currentStep > 1 && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handlePreviousStep}
+                        >
+                            Back
+                        </Button>
+                    )}
 
-                {currentStep < 4 && (
-                    <Button
-                        type="button"
-                        onClick={handleNextStep}
-                        disabled={
-                            (currentStep === 1 && (pinValidationStatus !== "valid" || passwordValidationStatus !== "valid")) ||
-                            (currentStep === 3 && paymentStatus !== "Paid")
-                        }
-                        className="bg-gradient-to-r from-purple-500 to-purple-700 ml-auto"
-                    >
-                        {currentStep === 3 ? "Proceed to Filing" : "Next Step"}
-                    </Button>
-                )}
-            </div>
+                    {currentStep < 4 && (
+                        <Button
+                            type="button"
+                            onClick={handleNextStep}
+                            disabled={
+                                (currentStep === 1 && (pinValidationStatus !== "valid" || passwordValidationStatus !== "valid")) ||
+                                (currentStep === 3 && paymentStatus !== "Paid")
+                            }
+                            className="bg-gradient-to-r from-purple-500 to-purple-700 ml-auto"
+                        >
+                            {currentStep === 3 ? "Proceed to Filing" : "Next Step"}
+                        </Button>
+                    )}
+                </div>
+            )}
         </div>
     )
 }
