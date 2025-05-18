@@ -540,41 +540,15 @@ export default function FilePage() {
     }
   };
 
+const handleEndSession = () => {
+  router.push('/')
+}
 
-  const handleEndSession = () => {
-    router.push('/')
-  }
-
-<<<<<<< HEAD
-  // const handleDialogAction = (action) => {
-  //   setShowDialog(false)
-  //   if (action === 'proceed') {
-  //     // Logic for proceeding with a new session
-  //     setFormData({
-  //       pin: "",
-  //       manufacturerName: "",
-  //       email: "",
-  //       mobileNumber: "",
-  //       mpesaNumber: "",
-  //       password: "",
-  //       fileType: fileType,
-  //       activeTab: 'pin'
-  //     })
-  //     setManufacturerDetails(null)
-  //     setPinValidationStatus("idle")
-  //     setPasswordValidationStatus("idle")
-  //     setStep(1)
-  //   }
-  //   // If 'cancel', just close the dialog
-  // }
-
-=======
->>>>>>> 7405cbf7aeeefbd67fcd6235facd226d5a60fb66
-  const handleActiveTabChange = (tab: 'id' | 'pin') => {
-    setFormData(prev => ({ ...prev, activeTab: tab }));
-    // Reset validation states when switching tabs
-    setPasswordValidationStatus("idle");
-    setPasswordError(null);
+const handleActiveTabChange = (tab: 'id' | 'pin') => {
+  setFormData(prev => ({ ...prev, activeTab: tab }));
+  // Reset validation states when switching tabs
+  setPasswordValidationStatus("idle");
+  setPasswordError(null);
 
     // Record tab change in database
     const currentSessionId = sessionService.getData('currentSessionId');
