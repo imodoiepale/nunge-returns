@@ -44,12 +44,12 @@ export default function Home() {
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 to-background pt-8">
         <div className="absolute inset-0 bg-grid-white/10 bg-[size:40px_40px] [mask-image:radial-gradient(white,transparent_70%)]" />
         <div className="container relative z-10 mx-auto flex flex-col items-center justify-center gap-4 py-20 text-center md:py-24">
-          <div className="absolute left-4 top-4 rounded-br-3xl bg-primary px-4 py-2 md:left-8 md:top-8">
+          {/* <div className="absolute left-4 top-4 rounded-br-3xl bg-primary px-4 py-2 md:left-8 md:top-8">
             <p className="text-sm font-medium text-primary-foreground">
              // Trusted by <span className="font-bold">{userCount}+</span> Kenyans
               Trusted by <span className="font-bold"> 18,096+</span> Kenyans
             </p>
-          </div>
+          </div> */}
           <div className="hidden sm:block absolute top-4 right-4 animate-bounce-slow duration-[4s] md:top-8 md:right-8">
             <Image
               src="/simple-logo - with-text.png"
