@@ -1,15 +1,15 @@
 // @ts-nocheck
 // lib/returnHelpers.ts
 import { supabase } from '@/lib/supabaseClient'
-import { 
-  ManufacturerDetails, 
-  FileReturnResponse, 
+import {
+  ManufacturerDetails,
+  FileReturnResponse,
   PhysicalAddress,
   PostalAddress,
   ContactDetails,
   BusinessDetails,
   FormData,
-  FilingStatus 
+  FilingStatus
 } from './types'
 import SessionManagementService from "@/src/sessionManagementService"
 import { v4 as uuidv4 } from 'uuid';
@@ -32,13 +32,13 @@ export const extractManufacturerDetails = async (pin: string) => {
               pin: pin
             }
           }]);
-          
+
         console.log('[DB] Recorded PIN details extraction attempt');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record PIN extraction attempt:', dbError);
       }
     }
-    
+
     const response = await fetch('/api/manufacturer', {
       method: 'POST',
       headers: {
@@ -63,16 +63,16 @@ export const extractManufacturerDetails = async (pin: string) => {
                 error: data.error
               }
             }]);
-            
+
           console.log('[DB] Recorded PIN extraction failure');
         } catch (dbError) {
           console.error('[DB ERROR] Failed to record PIN extraction failure:', dbError);
         }
       }
-      
+
       throw new Error(data.error)
     }
-    
+
     // Log the successful extraction
     if (currentSessionId) {
       try {
@@ -87,9 +87,9 @@ export const extractManufacturerDetails = async (pin: string) => {
               taxpayer_name: data.data.taxpayerName
             }
           }]);
-          
+
         console.log('[DB] Recorded successful PIN extraction');
-        
+
         // Create or update PIN record
         const pinId = uuidv4(); // Generate UUID for pin record
         const { data: pinData, error: pinError } = await supabase
@@ -112,18 +112,18 @@ export const extractManufacturerDetails = async (pin: string) => {
             returning: 'representation'
           })
           .select();
-          
+
         if (pinError) {
           console.error('[DB ERROR] Failed to update PIN record:', pinError);
         } else {
           console.log('[DB] Updated PIN record:', pinData);
         }
-        
+
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record successful PIN extraction:', dbError);
       }
     }
-    
+
     return data.data
   } catch (error: any) {
     console.error('Error extracting manufacturer details:', error)
@@ -134,13 +134,13 @@ export const extractManufacturerDetails = async (pin: string) => {
 // Debounce function to prevent excessive API calls
 const debounce = <T extends (...args: any[]) => Promise<any>>(func: T, wait: number): ((...args: Parameters<T>) => void) => {
   let timeout: NodeJS.Timeout | null = null;
-  
+
   return function executedFunction(...args: Parameters<T>) {
     const later = () => {
       timeout = null;
       func(...args);
     };
-    
+
     if (timeout) {
       clearTimeout(timeout);
     }
@@ -149,7 +149,7 @@ const debounce = <T extends (...args: any[]) => Promise<any>>(func: T, wait: num
 };
 
 export const validatePassword = async (
-  pin: string, 
+  pin: string,
   password: string,
   setPasswordValidationStatus?: (status: "idle" | "checking" | "invalid" | "valid") => void,
   setPasswordError?: (error: string | null) => void,
@@ -159,7 +159,7 @@ export const validatePassword = async (
     if (setPasswordValidationStatus) {
       setPasswordValidationStatus("checking");
     }
-    
+
     // Log password validation attempt
     const currentSessionId = sessionService.getData('currentSessionId');
     if (currentSessionId) {
@@ -174,13 +174,13 @@ export const validatePassword = async (
               pin: pin
             }
           }]);
-          
+
         console.log('[DB] Recorded password validation attempt');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record password validation attempt:', dbError);
       }
     }
-    
+
     // Validate PIN first if company_name is not provided
     if (!company_name) {
       try {
@@ -188,13 +188,13 @@ export const validatePassword = async (
         const pinResponse = await fetch(`/api/company/brs?pin=${encodeURIComponent(pin)}`, {
           method: 'GET'
         });
-        
+
         if (!pinResponse.ok) {
           throw new Error(`PIN validation failed with status ${pinResponse.status}`);
         }
-        
+
         const pinData = await pinResponse.json();
-        
+
         if (pinData.success && pinData.data) {
           company_name = pinData.data.taxpayerName || '';
           console.log(`[PIN Validation] Found taxpayer name: ${company_name}`);
@@ -205,23 +205,23 @@ export const validatePassword = async (
         console.error('[PIN Validation] Error:', pinError);
       }
     }
-    
+
     // Call the API for password validation
     try {
-      const response = await fetch('/api/validate-password', {
+      const response = await fetch('/api/auth/validate-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           company_name: company_name || '', // Company name or individual name
-          kra_pin: pin,
-          kra_password: password,
+          pin: pin,
+          password: password,
         }),
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         if (setPasswordValidationStatus) {
           setPasswordValidationStatus("valid");
@@ -229,7 +229,7 @@ export const validatePassword = async (
         if (setPasswordError) {
           setPasswordError(null);
         }
-        
+
         // Log successful validation
         if (currentSessionId) {
           try {
@@ -245,9 +245,9 @@ export const validatePassword = async (
                   timestamp: data.timestamp
                 }
               }]);
-              
+
             console.log('[DB] Recorded successful password validation');
-            
+
             // Update session with password validation
             await supabase
               .from('sessions')
@@ -260,13 +260,13 @@ export const validatePassword = async (
                 }
               })
               .eq('id', currentSessionId);
-              
+
             console.log('[DB] Updated session with password validation');
           } catch (dbError) {
             console.error('[DB ERROR] Failed to record successful password validation:', dbError);
           }
         }
-        
+
         return { isValid: true };
       } else {
         if (setPasswordValidationStatus) {
@@ -275,7 +275,7 @@ export const validatePassword = async (
         if (setPasswordError) {
           setPasswordError(data.message || "Please enter the correct password.");
         }
-        
+
         // Log failed validation
         if (currentSessionId) {
           try {
@@ -291,13 +291,13 @@ export const validatePassword = async (
                   status: data.status
                 }
               }]);
-              
+
             console.log('[DB] Recorded failed password validation');
           } catch (dbError) {
             console.error('[DB ERROR] Failed to record failed password validation:', dbError);
           }
         }
-        
+
         return { isValid: false, error: data.message };
       }
     } catch (apiError) {
@@ -311,7 +311,7 @@ export const validatePassword = async (
     if (setPasswordError) {
       setPasswordError("Failed to validate password. Please try again.");
     }
-    
+
     // Log validation error
     const currentSessionId = sessionService.getData('currentSessionId');
     if (currentSessionId) {
@@ -327,13 +327,13 @@ export const validatePassword = async (
               error: error.message
             }
           }]);
-          
+
         console.log('[DB] Recorded password validation error');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record password validation error:', dbError);
       }
     }
-    
+
     return { isValid: false, error: error.message };
   }
 };
@@ -350,7 +350,7 @@ export const debouncedValidatePassword = (
   if (setPasswordValidationStatus) {
     setPasswordValidationStatus("checking");
   }
-  
+
   // Return a promise that will resolve with the validation result
   return new Promise<{ isValid: boolean, error?: string }>((resolve) => {
     const debouncedValidation = debounce(async () => {
@@ -362,14 +362,14 @@ export const debouncedValidatePassword = (
         resolve({ isValid: false, error: error.message });
       }
     }, 3000); // 3 second debounce
-    
+
     debouncedValidation();
   });
 };
 
-export const fileNilReturn = async (credentials: { 
-  pin: string; 
-  password: string 
+export const fileNilReturn = async (credentials: {
+  pin: string;
+  password: string
 }): Promise<FileReturnResponse> => {
   try {
     // Log filing attempt
@@ -386,9 +386,9 @@ export const fileNilReturn = async (credentials: {
               pin: credentials.pin
             }
           }]);
-          
+
         console.log('[DB] Recorded return filing initiation');
-        
+
         // Update session status
         await supabase
           .from('sessions')
@@ -400,19 +400,19 @@ export const fileNilReturn = async (credentials: {
             }
           })
           .eq('id', currentSessionId);
-          
+
         console.log('[DB] Updated session with filing initiation');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record filing initiation:', dbError);
       }
     }
-    
+
     // Simulate filing process
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     // Generate receipt number
     const receiptNumber = `NR${Math.random().toString().slice(2, 10)}`;
-    
+
     // Log successful filing
     if (currentSessionId) {
       try {
@@ -427,23 +427,23 @@ export const fileNilReturn = async (credentials: {
               receipt_number: receiptNumber
             }
           }]);
-          
+
         console.log('[DB] Recorded successful filing');
-        
+
         // First, find or create the PIN record to get the UUID
         let pinIdUuid;
-        
+
         // Check if a pin record exists
         const { data: existingPin, error: pinQueryError } = await supabase
           .from('pins')
           .select('id')
           .eq('pin_number', credentials.pin)
           .maybeSingle(); // Use maybeSingle to avoid errors when no rows found
-          
+
         if (pinQueryError && pinQueryError.code !== 'PGRST116') {
           throw pinQueryError;
         }
-        
+
         if (existingPin) {
           // Use the existing pin's UUID
           pinIdUuid = existingPin.id;
@@ -464,16 +464,16 @@ export const fileNilReturn = async (credentials: {
             }])
             .select()
             .single();
-            
+
           if (insertError) {
             console.error('[DB ERROR] Failed to create pin record:', insertError);
             throw insertError;
           }
-          
+
           pinIdUuid = newPin.id;
           console.log('[DB] Created new pin record with ID:', pinIdUuid);
         }
-        
+
         // Create return record with the correct UUID
         const returnId = uuidv4(); // Generate UUID for return
         const { data: returnData, error: returnError } = await supabase
@@ -494,12 +494,12 @@ export const fileNilReturn = async (credentials: {
             }
           }])
           .select();
-          
+
         if (returnError) {
           console.error('[DB ERROR] Failed to create return record:', returnError);
         } else {
           console.log('[DB] Created return record:', returnData);
-          
+
           // Create return history record
           const historyId = uuidv4(); // Generate UUID for history
           const { error: historyError } = await supabase
@@ -517,14 +517,14 @@ export const fileNilReturn = async (credentials: {
                 receipt_number: receiptNumber
               }
             }]);
-            
+
           if (historyError) {
             console.error('[DB ERROR] Failed to create return history record:', historyError);
           } else {
             console.log('[DB] Created return history record');
           }
         }
-        
+
         // Update session as completed
         await supabase
           .from('sessions')
@@ -539,13 +539,13 @@ export const fileNilReturn = async (credentials: {
             }
           })
           .eq('id', currentSessionId);
-          
+
         console.log('[DB] Updated session as completed');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record successful filing:', dbError);
       }
     }
-    
+
     return {
       status: "success",
       message: "Return filed successfully",
@@ -553,7 +553,7 @@ export const fileNilReturn = async (credentials: {
     };
   } catch (error) {
     console.error('Error filing nil return:', error);
-    
+
     // Log filing error
     const currentSessionId = sessionService.getData('currentSessionId');
     if (currentSessionId) {
@@ -569,9 +569,9 @@ export const fileNilReturn = async (credentials: {
               error: error.message
             }
           }]);
-          
+
         console.log('[DB] Recorded filing error');
-        
+
         // Update session with error
         await supabase
           .from('sessions')
@@ -586,13 +586,13 @@ export const fileNilReturn = async (credentials: {
             }
           })
           .eq('id', currentSessionId);
-          
+
         console.log('[DB] Updated session with error');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record filing error:', dbError);
       }
     }
-    
+
     return { status: "error", message: (error as Error).message };
   }
 }
@@ -613,13 +613,13 @@ export const recoverPin = async (pin: string): Promise<boolean> => {
               pin: pin
             }
           }]);
-          
+
         console.log('[DB] Recorded PIN recovery request');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record PIN recovery request:', dbError);
       }
     }
-    
+
     const response = await fetch('/api/recover/pin', {
       method: 'POST',
       headers: {
@@ -627,9 +627,9 @@ export const recoverPin = async (pin: string): Promise<boolean> => {
       },
       body: JSON.stringify({ pin }),
     })
-    
+
     const data = await response.json()
-    
+
     // Log recovery result
     if (currentSessionId) {
       try {
@@ -645,17 +645,17 @@ export const recoverPin = async (pin: string): Promise<boolean> => {
               message: data.message
             }
           }]);
-          
+
         console.log('[DB] Recorded PIN recovery result');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record PIN recovery result:', dbError);
       }
     }
-    
+
     return data.success;
   } catch (error) {
     console.error('Error initiating PIN recovery:', error);
-    
+
     // Log recovery error
     const currentSessionId = sessionService.getData('currentSessionId');
     if (currentSessionId) {
@@ -671,13 +671,13 @@ export const recoverPin = async (pin: string): Promise<boolean> => {
               error: error.message
             }
           }]);
-          
+
         console.log('[DB] Recorded PIN recovery error');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record PIN recovery error:', dbError);
       }
     }
-    
+
     return false;
   }
 }
@@ -698,13 +698,13 @@ export const resetPassword = async (pin: string): Promise<boolean> => {
               pin: pin
             }
           }]);
-          
+
         console.log('[DB] Recorded password reset request');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record password reset request:', dbError);
       }
     }
-    
+
     const response = await fetch('/api/reset/password', {
       method: 'POST',
       headers: {
@@ -712,9 +712,9 @@ export const resetPassword = async (pin: string): Promise<boolean> => {
       },
       body: JSON.stringify({ pin }),
     })
-    
+
     const data = await response.json()
-    
+
     // Log reset result
     if (currentSessionId) {
       try {
@@ -730,17 +730,17 @@ export const resetPassword = async (pin: string): Promise<boolean> => {
               message: data.message
             }
           }]);
-          
+
         console.log('[DB] Recorded password reset result');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record password reset result:', dbError);
       }
     }
-    
+
     return data.success;
   } catch (error) {
     console.error('Error initiating password reset:', error);
-    
+
     // Log reset error
     const currentSessionId = sessionService.getData('currentSessionId');
     if (currentSessionId) {
@@ -756,13 +756,13 @@ export const resetPassword = async (pin: string): Promise<boolean> => {
               error: error.message
             }
           }]);
-          
+
         console.log('[DB] Recorded password reset error');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record password reset error:', dbError);
       }
     }
-    
+
     return false;
   }
 }
@@ -783,13 +783,13 @@ const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
               pin: pin
             }
           }]);
-          
+
         console.log('[DB] Recorded email and password reset request');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record email and password reset request:', dbError);
       }
     }
-    
+
     const response = await fetch('/api/reset/email-password', {
       method: 'POST',
       headers: {
@@ -799,7 +799,7 @@ const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
     })
 
     const data = await response.json()
-    
+
     // Log reset result
     if (currentSessionId) {
       try {
@@ -815,17 +815,17 @@ const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
               message: data.message
             }
           }]);
-          
+
         console.log('[DB] Recorded email and password reset result');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record email and password reset result:', dbError);
       }
     }
-    
+
     return data.success;
   } catch (error) {
     console.error('Error resetting email and password:', error);
-    
+
     // Log reset error
     const currentSessionId = sessionService.getData('currentSessionId');
     if (currentSessionId) {
@@ -841,13 +841,13 @@ const resetEmailAndPassword = async (pin: string): Promise<boolean> => {
               error: error.message
             }
           }]);
-          
+
         console.log('[DB] Recorded email and password reset error');
       } catch (dbError) {
         console.error('[DB ERROR] Failed to record email and password reset error:', dbError);
       }
     }
-    
+
     return false;
   }
 }
@@ -864,8 +864,8 @@ export const validatePIN = (pin: string): { isValid: boolean; error: string | nu
 
   // First check the starting letter before length
   if (!pin.startsWith('A') && !pin.startsWith('P')) {
-    return { 
-      isValid: false, 
+    return {
+      isValid: false,
       error: 'PIN must start with A (Individual) or P (Business)'
     };
   }
@@ -876,8 +876,8 @@ export const validatePIN = (pin: string): { isValid: boolean; error: string | nu
 
   const middleDigits = pin.substring(1, 10);
   if (!/^\d{9}$/.test(middleDigits)) {
-    return { 
-      isValid: false, 
+    return {
+      isValid: false,
       error: 'PIN must have exactly 9 digits after A/P and before final letter'
     };
   }

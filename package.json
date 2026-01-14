@@ -32,7 +32,8 @@
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.468.0",
-    "next": "^15.3.0",
+    "motion": "^12.26.2",
+    "next": "^16.1.1",
     "next-navigation": "^1.0.6",
     "next-themes": "^0.4.4",
     "nunge-returns": "file:",
@@ -42,7 +43,7 @@
     "react-hot-toast": "^2.4.1",
     "recharts": "^2.15.2",
     "tailwind-merge": "^2.5.5",
-    "tesseract.js": "^5.1.1",
+    "tesseract.js": "^5.0.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {

@@ -1,5 +1,19 @@
-// @ts-nocheck
 import { NextResponse } from 'next/server';
+import { validateIndividualPassword } from '@/services/passwordValidation';
+
+/**
+ * DEPRECATED: This endpoint is maintained for backward compatibility.
+ * Use /api/auth/validate-password instead for new implementations.
+ * 
+ * This now proxies to the Playwright-based validation instead of external Railway API.
+ */
+
+interface ValidationResult {
+  status: string;
+  message: string;
+  requiresPasswordReset?: boolean;
+  newPassword?: string;
+}
 
 export async function POST(request: Request) {
   try {
@@ -13,120 +27,59 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log(`Validating credentials for PIN: ${kra_pin}, Company: ${company_name || 'Not provided'}`);
+    console.log('[DEPRECATED] /api/validate-password called. Use /api/auth/validate-password instead.');
+    console.log(`[DEPRECATED] Validating credentials for PIN: ${kra_pin}, Company: ${company_name || 'Not provided'}`);
 
-    // Make a request to the external API for validation
+    // Use the new Playwright-based validation
     try {
-      // Log the request being made
-      console.log('Making request to external API with data:', JSON.stringify({
-        company_name: company_name || '',
-        kra_pin,
-        kra_password: '***' // Don't log the actual password
-      }));
+      const result = await validateIndividualPassword(kra_pin, kra_password, undefined) as ValidationResult;
 
-      // Use the correct URL from the error message and remove timeout
-      const response = await fetch('https://kra-apis-production.up.railway.app/api/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      console.log('[DEPRECATED] Validation result:', result.status);
+
+      // Map new status to old format for backward compatibility
+      if (result.status === 'valid') {
+        return NextResponse.json({
+          success: true,
+          message: result.message || 'Login successful',
+          status: 'Valid',
+          timestamp: new Date().toISOString(),
           company_name: company_name || '',
-          kra_pin,
-          kra_password,
-        }),
-      });
-
-      console.log('External API response status:', response.status, response.statusText);
-
-      if (!response.ok) {
-        console.error(`External API request failed with status ${response.status}`);
-
-        // Handle different HTTP error codes
-        if (response.status === 404) {
-          return NextResponse.json(
-            { success: false, message: 'KRA validation service not found. Please check the API endpoint URL.', status: 'Error' },
-            { status: 502 }
-          );
-        } else if (response.status === 429) {
-          return NextResponse.json(
-            { success: false, message: 'Too many requests to KRA system, please try again later', status: 'Error' },
-            { status: 429 }
-          );
-        } else {
-          return NextResponse.json(
-            { success: false, message: `KRA system returned error: ${response.statusText}`, status: 'Error' },
-            { status: 502 }
-          );
-        }
-      }
-
-      // Parse the response
-      let responseData;
-      try {
-        responseData = await response.json();
-        console.log('External API response:', JSON.stringify(responseData));
-      } catch (parseError) {
-        console.error('Failed to parse response from external API:', parseError);
-        return NextResponse.json(
-          { success: false, message: 'Invalid response from KRA system', status: 'Error' },
-          { status: 502 }
-        );
-      }
-
-      // Check if the response has the expected structure
-      if (responseData.status === 'success' && responseData.data) {
-        const data = responseData.data;
-
-        // Format the response based on the external API response
-        if (data.status === 'Valid' && data.message === 'Login successful') {
-          return NextResponse.json({
-            success: true,
-            message: data.message,
-            status: data.status,
-            timestamp: data.timestamp || new Date().toISOString(),
-            company_name: data.company_name || company_name || '',
-            kra_pin: data.kra_pin || kra_pin
-          });
-        } else {
-          // Return more detailed error information
-          return NextResponse.json(
-            {
-              success: false,
-              message: data.message || 'Invalid credentials',
-              status: data.status || 'Invalid',
-              timestamp: data.timestamp || new Date().toISOString()
-            },
-            { status: 401 }
-          );
-        }
+          kra_pin: kra_pin
+        });
+      } else if (result.status === 'password_expired') {
+        return NextResponse.json({
+          success: false,
+          message: result.message || 'Password has expired',
+          status: 'password_expired',
+          requiresPasswordReset: true,
+          timestamp: new Date().toISOString()
+        }, { status: 401 });
+      } else if (result.status === 'locked') {
+        return NextResponse.json({
+          success: false,
+          message: result.message || 'Account is locked',
+          status: 'locked',
+          timestamp: new Date().toISOString()
+        }, { status: 401 });
+      } else if (result.status === 'cancelled') {
+        return NextResponse.json({
+          success: false,
+          message: result.message || 'Account is cancelled',
+          status: 'cancelled',
+          timestamp: new Date().toISOString()
+        }, { status: 401 });
       } else {
-        // For direct response format (not nested)
-        if (responseData.status === 'Valid' && responseData.message === 'Login successful') {
-          return NextResponse.json({
-            success: true,
-            message: responseData.message,
-            status: responseData.status,
-            timestamp: responseData.timestamp || new Date().toISOString(),
-            company_name: responseData.company_name || company_name || '',
-            kra_pin: responseData.kra_pin || kra_pin
-          });
-        }
-
-        // Handle unexpected response format
-        console.error('Unexpected response format from external API:', responseData);
-        return NextResponse.json(
-          {
-            success: false,
-            message: 'Unexpected response format from KRA system',
-            status: 'Error'
-          },
-          { status: 502 }
-        );
+        return NextResponse.json({
+          success: false,
+          message: result.message || 'Invalid credentials',
+          status: 'Invalid',
+          timestamp: new Date().toISOString()
+        }, { status: 401 });
       }
-    } catch (error) {
+
+    } catch (error: unknown) {
       const apiError = error as Error;
-      console.error('External API error:', apiError);
+      console.error('[DEPRECATED] Validation error:', apiError);
       return NextResponse.json(
         {
           success: false,
@@ -137,13 +90,14 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-  } catch (error) {
-    console.error('Password validation error:', error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('[DEPRECATED] Password validation error:', err);
     return NextResponse.json(
       {
         success: false,
         message: 'Internal server error',
-        error: error.message,
+        error: err.message || 'Unknown error',
         status: 'Error'
       },
       { status: 500 }

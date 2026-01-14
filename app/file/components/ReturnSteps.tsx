@@ -232,116 +232,12 @@ export function ReturnSteps() {
         }
     };
 
-    const handlePasswordChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newPassword = e.target.value;
         setFormData(prev => ({ ...prev, password: newPassword }));
 
-        if (newPassword.length > 0) {
-            setPasswordValidationStatus("checking");
-
-            try {
-                // Record password validation attempt in database
-                const currentSessionId = sessionService.getData('currentSessionId');
-                if (currentSessionId) {
-                    try {
-                        await supabase
-                            .from('session_activities')
-                            .insert([{
-                                session_id: currentSessionId,
-                                activity_type: 'user_action',
-                                description: 'Password validation attempted',
-                                metadata: {
-                                    pin: formData.pin
-                                }
-                            }]);
-                        console.log('[DB] Recorded password validation attempt');
-                    } catch (dbError) {
-                        console.error('[DB ERROR] Error recording password validation attempt:', dbError);
-                    }
-                }
-
-                // Validate password using debounced function
-                const { isValid, error: validationError } = await debouncedValidatePassword(
-                    formData.pin, 
-                    newPassword,
-                    setPasswordValidationStatus,
-                    setPasswordError,
-                    formData.company_name
-                );
-
-                if (isValid) {
-                    setPasswordValidationStatus("valid");
-                    setPasswordError(null);
-
-                    // Record successful password validation in database
-                    if (currentSessionId) {
-                        try {
-                            await supabase
-                                .from('session_activities')
-                                .insert([{
-                                    session_id: currentSessionId,
-                                    activity_type: 'user_action',
-                                    description: 'Password validated successfully',
-                                    metadata: {
-                                        pin: formData.pin
-                                    }
-                                }]);
-                            console.log('[DB] Recorded successful password validation');
-                        } catch (dbError) {
-                            console.error('[DB ERROR] Error recording successful password validation:', dbError);
-                        }
-                    }
-                } else {
-                    setPasswordValidationStatus("invalid");
-                    setPasswordError(validationError || "Invalid password. Please check and try again.");
-
-                    // Record failed password validation in database
-                    if (currentSessionId) {
-                        try {
-                            await supabase
-                                .from('session_activities')
-                                .insert([{
-                                    session_id: currentSessionId,
-                                    activity_type: 'user_action',
-                                    description: 'Password validation failed',
-                                    metadata: {
-                                        pin: formData.pin,
-                                        error: validationError || "Invalid password"
-                                    }
-                                }]);
-                            console.log('[DB] Recorded failed password validation');
-                        } catch (dbError) {
-                            console.error('[DB ERROR] Error recording failed password validation:', dbError);
-                        }
-                    }
-                }
-            } catch (error) {
-                setPasswordValidationStatus("invalid");
-                setPasswordError("Error validating password. Please try again.");
-                console.error('[APP ERROR] Password validation error:', error);
-
-                // Record password validation error in database
-                const currentSessionId = sessionService.getData('currentSessionId');
-                if (currentSessionId) {
-                    try {
-                        await supabase
-                            .from('session_activities')
-                            .insert([{
-                                session_id: currentSessionId,
-                                activity_type: 'error',
-                                description: 'Password validation error',
-                                metadata: {
-                                    pin: formData.pin,
-                                    error: error.message || "Unknown error"
-                                }
-                            }]);
-                        console.log('[DB] Recorded password validation error');
-                    } catch (dbError) {
-                        console.error('[DB ERROR] Error recording password validation error:', dbError);
-                    }
-                }
-            }
-        } else {
+        // Reset validation status when password changes
+        if (passwordValidationStatus === "valid" || passwordValidationStatus === "invalid") {
             setPasswordValidationStatus("idle");
             setPasswordError(null);
         }
@@ -789,6 +685,15 @@ export function ReturnSteps() {
                     onPasswordChange={handlePasswordChange}
                     onPasswordReset={handlePasswordReset}
                     onPasswordEmailReset={handlePasswordEmailReset}
+                    onPasswordValidate={async () => {
+                        await validatePassword(
+                            formData.pin,
+                            formData.password,
+                            setPasswordValidationStatus,
+                            setPasswordError,
+                            formData.company_name
+                        );
+                    }}
                     onNext={handleNextStep}
                     onActiveTabChange={handleActiveTabChange}
                     onManufacturerDetailsFound={setManufacturerDetails}

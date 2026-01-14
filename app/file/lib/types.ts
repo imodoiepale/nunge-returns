@@ -180,3 +180,49 @@ export interface PaymentDetails {
   status: PaymentStatus;
   transactionId?: string;
 }
+
+export interface TaxpayerData {
+  pin: string;
+  taxpayerName: string;
+  mainEmailId?: string;
+  mobileNumber?: string;
+}
+
+export interface Step1Props {
+  pin: string;
+  password: string;
+  error: string | null;
+  passwordError: string | null;
+  pinValidationStatus: ValidationStatus;
+  passwordValidationStatus: ValidationStatus;
+  onPINChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPasswordChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPasswordReset?: () => void;
+  onPasswordEmailReset?: () => void;
+  onPasswordValidate?: () => Promise<void>;
+  onNext: () => void;
+  onActiveTabChange?: (tab: 'id' | 'pin') => void;
+  onManufacturerDetailsFound?: (details: ManufacturerDetails) => void;
+}
+
+export interface Step2Props {
+  manufacturerDetails: ManufacturerDetails | null;
+  onNext: () => void;
+  onBack: () => void;
+}
+
+export interface Step3Props {
+  formData: FormData;
+  paymentStatus: PaymentStatus;
+  onPaymentStatusChange: (status: PaymentStatus) => void;
+  onNext: () => void;
+  onBack: () => void;
+}
+
+export interface Step4Props {
+  formData: FormData;
+  filingStatus: FilingStatus;
+  receiptNumber: string | null;
+  onDownloadReceipt: (type: 'acknowledgement' | 'purchase' | 'all') => Promise<void>;
+  onBack: () => void;
+}

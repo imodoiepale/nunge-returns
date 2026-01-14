@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Check, ArrowDown, Flag, Eye, EyeOff, Loader2, ArrowRight, User, Mail, Building2, MapPin, LogIn, FileText, FileDown, CheckCircle, PhoneIcon, CreditCard, AlertTriangle, X } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { supabase } from '@/lib/supabaseClient'
@@ -29,6 +30,7 @@ export default function Step1PIN({
     onPasswordChange,
     onPasswordReset,
     onPasswordEmailReset,
+    onPasswordValidate,
     onNext,
     onActiveTabChange,
     onManufacturerDetailsFound
@@ -44,16 +46,15 @@ export default function Step1PIN({
     const [idSearchError, setIdSearchError] = useState<string | null>(null)
 
     const handleIdSearch = async () => {
-        if (!idNumber || !firstName) return;
+        if (!idNumber || idNumber.length !== 8) return;
 
         setIdSearchStatus('searching');
         setIdSearchError(null);
-        setTaxpayerData(null);
 
         try {
-            console.log(`Searching with ID: ${idNumber}, Name: ${firstName}`);
+            console.log('[ID SEARCH] Starting search for ID:', idNumber);
 
-            // Create or update database record for the search attempt
+            // Record search attempt in database
             const currentSessionId = sessionService.getData('currentSessionId');
             if (currentSessionId) {
                 try {
@@ -62,11 +63,10 @@ export default function Step1PIN({
                         .insert([{
                             session_id: currentSessionId,
                             activity_type: 'user_action',
-                            description: 'ID search attempted',
+                            description: 'ID number search attempted',
                             metadata: {
                                 id_number: idNumber,
-                                first_name: firstName,
-                                search_method: 'id'
+                                timestamp: new Date().toISOString()
                             }
                         }]);
 
@@ -76,44 +76,52 @@ export default function Step1PIN({
                 }
             }
 
-            const response = await fetch(
-                `/api/manufacturer/brs?id=${encodeURIComponent(idNumber)}&firstName=${encodeURIComponent(firstName)}`,
-                { method: 'GET' }
-            );
+            // Use new KRA API endpoint
+            const response = await fetch('/api/kra/fetch-by-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idNumber })
+            });
 
             if (!response.ok) {
-                throw new Error(`API request failed with status ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.message || errorData.error || 'Failed to fetch details from KRA');
             }
 
-            const responseText = await response.text();
-            console.log('Raw API response:', responseText);
+            const data = await response.json();
+            console.log('[ID SEARCH] API response:', data);
 
-            let data;
-            try {
-                data = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error('Failed to parse response as JSON:', parseError);
-                throw new Error('Invalid response format from server');
-            }
+            if (data.success && data.manufacturerDetails) {
+                const fullName = data.manufacturerDetails.basic?.fullName ||
+                    data.manufacturerDetails.basic?.manufacturerName ||
+                    'Unknown';
 
-            if (data.success && data.data) {
-                console.log('Found taxpayer data:', data.data);
-
-                // Check if the data has required fields
-                if (!data.data.pin || !data.data.taxpayerName) {
-                    throw new Error('Incomplete taxpayer data returned');
-                }
-
-                // Add default password if not provided
+                // Format data for Step1PIN component
                 const enrichedData = {
-                    ...data.data,
-                    password: data.data.password || '1234'
+                    pin: data.pin,
+                    taxpayerName: fullName,
+                    mainEmailId: data.manufacturerDetails.contact?.mainEmail || '',
+                    mobileNumber: data.manufacturerDetails.contact?.mobileNumber || '',
+                    secondaryEmail: data.manufacturerDetails.contact?.secondaryEmail || '',
+                    descriptiveAddress: data.manufacturerDetails.address?.descriptive || '',
+                    postalAddress: {
+                        postalCode: data.manufacturerDetails.address?.postalCode || '',
+                        town: data.manufacturerDetails.address?.town || '',
+                        poBox: data.manufacturerDetails.address?.poBox || ''
+                    },
+                    businessInfo: {
+                        name: data.manufacturerDetails.business?.businessName || fullName,
+                        registrationNumber: data.manufacturerDetails.basic?.registrationNumber || '',
+                        registrationDate: data.manufacturerDetails.business?.registrationDate || '',
+                        commencementDate: data.manufacturerDetails.business?.commencementDate || ''
+                    }
                 };
 
                 setTaxpayerData(enrichedData);
                 setIdSearchStatus('found');
 
                 // Record successful search in database
+                const currentSessionId = sessionService.getData('currentSessionId');
                 if (currentSessionId) {
                     try {
                         await supabase
@@ -124,9 +132,8 @@ export default function Step1PIN({
                                 description: 'ID search successful',
                                 metadata: {
                                     id_number: idNumber,
-                                    first_name: firstName,
-                                    pin: data.data.pin,
-                                    taxpayer_name: data.data.taxpayerName
+                                    pin: data.pin,
+                                    taxpayer_name: fullName
                                 }
                             }]);
 
@@ -135,19 +142,20 @@ export default function Step1PIN({
                         console.error('[DB ERROR] Failed to record successful search:', dbError);
                     }
                 }
-                
+
                 // Update the PIN in the parent component
-                onPINChange({ target: { value: data.data.pin } } as React.ChangeEvent<HTMLInputElement>);
-                
+                onPINChange({ target: { value: data.pin } } as React.ChangeEvent<HTMLInputElement>);
+
                 // Switch to PIN tab after successful ID search
                 handleTabChange('pin');
-                
+
             } else {
                 console.log('No matching records found or invalid response format');
                 setIdSearchStatus('not-found');
                 setIdSearchError('No matching records found. Please verify your details.');
 
                 // Record failed search in database
+                const currentSessionId = sessionService.getData('currentSessionId');
                 if (currentSessionId) {
                     try {
                         await supabase
@@ -158,7 +166,6 @@ export default function Step1PIN({
                                 description: 'ID search failed',
                                 metadata: {
                                     id_number: idNumber,
-                                    first_name: firstName,
                                     reason: 'No matching records'
                                 }
                             }]);
@@ -186,7 +193,6 @@ export default function Step1PIN({
                             description: 'ID search error',
                             metadata: {
                                 id_number: idNumber,
-                                first_name: firstName,
                                 error: error.message
                             }
                         }]);
@@ -260,7 +266,6 @@ export default function Step1PIN({
                                 name: taxpayerData.taxpayerName,
                                 phone: taxpayerData.mobileNumber,
                                 id_number: idNumber,
-                                first_name: firstName,
                                 updated_at: new Date().toISOString()
                             })
                             .eq('email', taxpayerData.mainEmailId)
@@ -283,16 +288,15 @@ export default function Step1PIN({
                                 name: taxpayerData.taxpayerName,
                                 email: taxpayerData.mainEmailId,
                                 phone: taxpayerData.mobileNumber,
-                                id_number: idNumber,
-                                first_name: firstName
+                                id_number: idNumber
                             })
                             .select()
                             .single();
 
                         if (userError) {
-                            console.error('[DB ERROR] Failed to update user data:', userError);
+                            console.error('[DB ERROR] Failed to create user data:', userError);
                         } else {
-                            console.log('[DB] User data updated:', userData);
+                            console.log('[DB] User data created:', userData);
                         }
                     }
 
@@ -308,8 +312,7 @@ export default function Step1PIN({
                                 pin: taxpayerData.pin,
                                 taxpayer_name: taxpayerData.taxpayerName,
                                 email: taxpayerData.mainEmailId,
-                                id_number: idNumber,
-                                first_name: firstName
+                                id_number: idNumber
                             }
                         })
                         .eq('id', currentSessionId);
@@ -374,10 +377,10 @@ export default function Step1PIN({
 
     const handleTabChange = (tab: 'id' | 'pin') => {
         setActiveTab(tab);
-        
+
         // Call the parent component's handler
         onActiveTabChange(tab);
-        
+
         // Record tab change in database
         const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId) {
@@ -400,9 +403,66 @@ export default function Step1PIN({
         }
     };
 
-    const handlePINChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePINChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const enteredPin = e.target.value;
+
         // Pass the event to the parent component's handler
         onPINChange(e);
+
+        // If PIN came from ID search (taxpayerData exists), skip validation - it's already valid
+        if (taxpayerData && taxpayerData.pin === enteredPin) {
+            console.log('[PIN] PIN from ID search - already validated, skipping check');
+            return;
+        }
+
+        // For manually entered PINs, validate by fetching manufacturer details
+        if (enteredPin.length >= 10) {
+            try {
+                console.log('[PIN] Validating manually entered PIN:', enteredPin);
+
+                const response = await fetch('/api/kra/validate-pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: enteredPin })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.manufacturerDetails) {
+                    console.log('[PIN] Valid PIN - manufacturer details found');
+                    // Store the fetched data
+                    const fullName = data.manufacturerDetails.basic?.fullName ||
+                        data.manufacturerDetails.basic?.manufacturerName ||
+                        'Unknown';
+
+                    setTaxpayerData({
+                        pin: enteredPin,
+                        taxpayerName: fullName,
+                        mainEmailId: data.manufacturerDetails.contact?.mainEmail || '',
+                        mobileNumber: data.manufacturerDetails.contact?.mobileNumber || '',
+                        secondaryEmail: data.manufacturerDetails.contact?.secondaryEmail || '',
+                        descriptiveAddress: data.manufacturerDetails.address?.descriptive || '',
+                        postalAddress: {
+                            postalCode: data.manufacturerDetails.address?.postalCode || '',
+                            town: data.manufacturerDetails.address?.town || '',
+                            poBox: data.manufacturerDetails.address?.poBox || ''
+                        },
+                        businessInfo: {
+                            name: data.manufacturerDetails.business?.businessName || fullName,
+                            registrationNumber: data.manufacturerDetails.basic?.registrationNumber || '',
+                            registrationDate: data.manufacturerDetails.business?.registrationDate || '',
+                            commencementDate: data.manufacturerDetails.business?.commencementDate || ''
+                        }
+                    });
+                } else {
+                    console.log('[PIN] Invalid PIN - no manufacturer details found');
+                    setTaxpayerData(null);
+                }
+            } catch (error) {
+                console.error('[PIN] Error validating PIN:', error);
+                setTaxpayerData(null);
+            }
+        }
     };
 
     // Effect to automatically switch to PIN tab if PIN is already set
@@ -457,27 +517,21 @@ export default function Step1PIN({
 
                 {activeTab === 'id' && (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid gap-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="id-number">ID Number</Label>
+                                <Label htmlFor="id-number">National ID Number</Label>
                                 <Input
                                     id="id-number"
                                     value={idNumber}
-                                    onChange={(e) => setIdNumber(e.target.value)}
-                                    placeholder="Enter your ID number"
+                                    onChange={(e) => setIdNumber(e.target.value.replace(/\D/g, ''))}
+                                    placeholder="Enter your 8-digit ID number"
+                                    maxLength={8}
                                     required
+                                    className="text-lg h-12"
                                 />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="first-name">First Name</Label>
-                                <Input
-                                    id="first-name"
-                                    value={firstName}
-                                    onChange={(e) => setFirstName(e.target.value)}
-                                    placeholder="Enter your first name"
-                                    required
-                                />
+                                <p className="text-sm text-muted-foreground">
+                                    We'll automatically fetch your name and PIN from KRA
+                                </p>
                             </div>
                         </div>
 
@@ -491,13 +545,13 @@ export default function Step1PIN({
                         <Button
                             type="button"
                             onClick={handleIdSearch}
-                            disabled={!idNumber || !firstName || idSearchStatus === 'searching'}
-                            className="w-full bg-gradient-to-r from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800 text-white"
+                            disabled={idNumber.length !== 8 || idSearchStatus === 'searching'}
+                            className="w-full h-12 text-lg bg-gradient-to-r from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800 text-white"
                         >
                             {idSearchStatus === 'searching' ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Searching...
+                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                    Fetching your details...
                                 </>
                             ) : (
                                 "Search for KRA PIN"
@@ -544,6 +598,15 @@ export default function Step1PIN({
 
                 {activeTab === 'pin' && (
                     <div className="space-y-4">
+                        {/* User Info Badge - shown when coming from ID search */}
+                        {taxpayerData && (
+                            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                <span className="text-sm font-medium text-green-900">Account Found:</span>
+                                <span className="text-sm font-semibold text-green-900">{taxpayerData.taxpayerName}</span>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="pin">KRA PIN</Label>
@@ -611,30 +674,57 @@ export default function Step1PIN({
                                         )}
                                     </div>
                                 </div>
-                                <div className="relative">
-                                    <Input
+                                <InputGroup className={cn(
+                                    passwordValidationStatus === "invalid" && "border-red-500",
+                                    passwordValidationStatus === "valid" && "border-green-500"
+                                )}>
+                                    <InputGroupInput
                                         id="password"
                                         type={showPassword ? "text" : "password"}
                                         value={password}
                                         onChange={onPasswordChange}
-                                        className={cn(
-                                            passwordValidationStatus === "invalid" && "border-red-500",
-                                            passwordValidationStatus === "valid" && "border-green-500"
-                                        )}
+                                        placeholder="Enter your KRA password"
                                         required
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                                    >
-                                        {showPassword ? (
-                                            <EyeOff className="h-4 w-4" />
-                                        ) : (
-                                            <Eye className="h-4 w-4" />
+                                    <InputGroupAddon align="inline-end">
+                                        <InputGroupButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-xs"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            title={showPassword ? "Hide password" : "Show password"}
+                                        >
+                                            {showPassword ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </InputGroupButton>
+                                        {passwordValidationStatus !== "valid" && password.length > 0 && (
+                                            <InputGroupButton
+                                                type="button"
+                                                variant="default"
+                                                size="sm"
+                                                disabled={passwordValidationStatus === "checking" || !pin}
+                                                onClick={async () => {
+                                                    if (onPasswordValidate) {
+                                                        await onPasswordValidate()
+                                                    }
+                                                }}
+                                                className="ml-1 bg-gradient-to-r from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800"
+                                            >
+                                                {passwordValidationStatus === "checking" ? (
+                                                    <>
+                                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                                        Validating
+                                                    </>
+                                                ) : (
+                                                    "Validate"
+                                                )}
+                                            </InputGroupButton>
                                         )}
-                                    </button>
-                                </div>
+                                    </InputGroupAddon>
+                                </InputGroup>
                             </div>
                         </div>
 

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import https from 'https';
 
-const API_URL = 'https://primary-production-079f.up.railway.app/webhook/manufucturerDetails';
-const API_URL2 = 'https://primary-production-079f.up.railway.app/webhook/manufucturerDetails';
+/**
+ * DEPRECATED: This endpoint now uses direct KRA fetch instead of external Railway service
+ * Maintained for backward compatibility with old code
+ * New code should use /api/kra/validate-pin instead
+ */
 
 interface ManufacturerDetails {
   pin: string;
@@ -27,7 +31,128 @@ interface ManufacturerDetails {
   };
 }
 
+async function initKraSession(): Promise<Record<string, string>> {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'itax.kra.go.ke',
+      port: 443,
+      path: '/KRA-Portal/',
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 30000
+    };
+
+    const req = https.request(options, (res) => {
+      const cookies = res.headers['set-cookie'] || [];
+      const cookieMap: Record<string, string> = {};
+
+      cookies.forEach((cookie) => {
+        const [nameValue] = cookie.split(';');
+        const [name, value] = nameValue.split('=');
+        if (name && value) {
+          cookieMap[name] = value;
+        }
+      });
+
+      resolve(cookieMap);
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Session initialization timeout'));
+    });
+    req.end();
+  });
+}
+
+async function fetchManufacturerDetailsFromKRA(pin: string, cookies: Record<string, string>): Promise<any> {
+  return new Promise((resolve) => {
+    const cookieString = Object.entries(cookies)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('; ');
+
+    const body = `manPin=${encodeURIComponent(pin)}`;
+
+    const options = {
+      hostname: 'itax.kra.go.ke',
+      port: 443,
+      path: '/KRA-Portal/manufacturerAuthorizationController.htm?actionCode=fetchManDtl',
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Content-Length': Buffer.byteLength(body),
+        'Cookie': cookieString,
+        'Referer': 'https://itax.kra.go.ke/KRA-Portal/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      timeout: 30000
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode !== 200) {
+          resolve({ error: `HTTP ${res.statusCode}` });
+          return;
+        }
+
+        try {
+          const parsedData = JSON.parse(data);
+
+          if (parsedData && parsedData.timsManBasicRDtlDTO) {
+            const firstName = parsedData.timsManBasicRDtlDTO?.firstName || '';
+            const middleName = parsedData.timsManBasicRDtlDTO?.middleName || '';
+            const lastName = parsedData.timsManBasicRDtlDTO?.lastName || '';
+            const manufacturerName = parsedData.timsManBasicRDtlDTO?.manufacturerName || '';
+
+            let fullName = manufacturerName;
+            if (firstName || lastName) {
+              fullName = [firstName, middleName, lastName]
+                .filter(name => name && name.trim())
+                .join(' ');
+            }
+
+            resolve({
+              timsManBasicRDtlDTO: {
+                ...parsedData.timsManBasicRDtlDTO,
+                fullName
+              },
+              manContactRDtlDTO: parsedData.manContactRDtlDTO,
+              manBusinessRDtlDTO: parsedData.manBusinessRDtlDTO,
+              manAddRDtlDTO: parsedData.manAddRDtlDTO
+            });
+          } else {
+            resolve({ error: 'No manufacturer details found' });
+          }
+        } catch (parseError) {
+          resolve({ error: 'Failed to parse response' });
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      resolve({ error: error.message });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ error: 'Request timeout' });
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
+
 export async function GET(request: Request) {
+  const startTime = Date.now();
+
   try {
     const { searchParams } = new URL(request.url);
     const pin = searchParams.get('pin');
@@ -39,26 +164,22 @@ export async function GET(request: Request) {
       );
     }
 
-    console.log('Fetching from URL:', `${API_URL}?pin=${pin}`);
-    const response = await fetch(`${API_URL}?pin=${pin}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch manufacturer details: ${response.status} ${response.statusText}`);
+    console.log('[DEPRECATED API] Fetching manufacturer details for PIN:', pin);
+    console.log('[DEPRECATED API] Consider using /api/kra/validate-pin instead');
+
+    // Initialize KRA session
+    const cookies = await initKraSession();
+
+    // Fetch details directly from KRA
+    const parsedData = await fetchManufacturerDetailsFromKRA(pin, cookies);
+
+    if (parsedData.error) {
+      throw new Error(parsedData.error);
     }
-
-    const rawData = await response.json();
-    console.log('Raw API Response:', JSON.stringify(rawData, null, 2));
-
-    if (!Array.isArray(rawData) || rawData.length === 0 || !rawData[0].data) {
-      throw new Error('Invalid response format from manufacturer details API');
-    }
-
-    const parsedData = JSON.parse(rawData[0].data);
-    console.log('Parsed Data:', JSON.stringify(parsedData, null, 2));
 
     const details: ManufacturerDetails = {
       pin: pin,
-      name: parsedData.timsManBasicRDtlDTO?.manufacturerName || '',
+      name: parsedData.timsManBasicRDtlDTO?.fullName || parsedData.timsManBasicRDtlDTO?.manufacturerName || '',
       contactDetails: {
         mobile: parsedData.manContactRDtlDTO?.mobileNo || '',
         email: parsedData.manContactRDtlDTO?.mainEmail || '',
@@ -80,11 +201,14 @@ export async function GET(request: Request) {
       }
     };
 
-    console.log('Formatted Details:', details);
+    const duration = Date.now() - startTime;
+    console.log(`[DEPRECATED API] Request completed in ${duration}ms`);
+
     return NextResponse.json({ success: true, data: details });
-    
+
   } catch (error) {
-    console.error('Error:', error);
+    const duration = Date.now() - startTime;
+    console.error(`[DEPRECATED API] Error after ${duration}ms:`, error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'An unknown error occurred' },
       { status: 500 }

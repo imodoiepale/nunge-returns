@@ -397,158 +397,26 @@ export default function FilePage() {
     }
   };
 
-  const handlePasswordChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPassword = e.target.value;
     setFormData(prev => ({ ...prev, password: newPassword }));
 
-    // Reset validation if password is empty
-    if (!newPassword) {
+    // Reset validation status when password changes
+    if (passwordValidationStatus === "valid" || passwordValidationStatus === "invalid") {
       setPasswordValidationStatus("idle");
       setPasswordError(null);
-      return;
-    }
-
-    // Only validate if we have a valid PIN
-    if (formData.pin && pinValidationStatus === "valid") {
-      setPasswordValidationStatus("checking");
-
-      // Record password validation attempt in database
-      const currentSessionId = sessionService.getData('currentSessionId');
-      if (currentSessionId) {
-        try {
-          await supabase
-            .from('session_activities')
-            .insert([{
-              session_id: currentSessionId,
-              activity_type: 'user_action',
-              description: 'Password validation attempted',
-              metadata: {
-                pin: formData.pin
-              }
-            }]);
-
-          console.log('[DB] Recorded password validation attempt');
-        } catch (dbError) {
-          console.error('[DB ERROR] Failed to record password validation attempt:', dbError);
-        }
-      }
-
-      try {
-        const response = await fetch('/api/validate-password', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            kra_pin: formData.pin, 
-            kra_password: newPassword,
-            company_name: manufacturerDetails?.name || formData.manufacturerName || ''
-          }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          setPasswordValidationStatus("valid");
-          setPasswordError(null);
-
-          // Record successful validation in database
-          if (currentSessionId) {
-            try {
-              await supabase
-                .from('session_activities')
-                .insert([{
-                  session_id: currentSessionId,
-                  activity_type: 'user_action',
-                  description: 'Password validated successfully',
-                  metadata: {
-                    pin: formData.pin
-                  }
-                }]);
-
-              console.log('[DB] Recorded successful password validation');
-
-              // Update session with password validation
-              await supabase
-                .from('sessions')
-                .update({
-                  form_data: {
-                    ...formData,
-                    password: newPassword,
-                    passwordValidated: true
-                  },
-                  last_activity: new Date().toISOString()
-                })
-                .eq('id', currentSessionId);
-
-              console.log('[DB] Updated session with password validation');
-            } catch (dbError) {
-              console.error('[DB ERROR] Failed to record successful password validation:', dbError);
-            }
-          }
-        } else {
-          setPasswordValidationStatus("invalid");
-          setPasswordError(data.message || "Invalid password");
-
-          // Record failed validation in database
-          if (currentSessionId) {
-            try {
-              await supabase
-                .from('session_activities')
-                .insert([{
-                  session_id: currentSessionId,
-                  activity_type: 'user_action',
-                  description: 'Password validation failed',
-                  metadata: {
-                    pin: formData.pin,
-                    reason: data.message || "Invalid password"
-                  }
-                }]);
-
-              console.log('[DB] Recorded failed password validation');
-            } catch (dbError) {
-              console.error('[DB ERROR] Failed to record failed password validation:', dbError);
-            }
-          }
-        }
-      } catch (error) {
-        setPasswordValidationStatus("invalid");
-        setPasswordError("Error validating password");
-
-        // Record error in database
-        const currentSessionId = sessionService.getData('currentSessionId');
-        if (currentSessionId) {
-          try {
-            await supabase
-              .from('session_activities')
-              .insert([{
-                session_id: currentSessionId,
-                activity_type: 'user_action',
-                description: 'Password validation error',
-                metadata: {
-                  pin: formData.pin,
-                  error: error.message
-                }
-              }]);
-
-            console.log('[DB] Recorded password validation error');
-          } catch (dbError) {
-            console.error('[DB ERROR] Failed to record password validation error:', dbError);
-          }
-        }
-      }
     }
   };
 
-const handleEndSession = () => {
-  router.push('/')
-}
+  const handleEndSession = () => {
+    router.push('/')
+  }
 
-const handleActiveTabChange = (tab: 'id' | 'pin') => {
-  setFormData(prev => ({ ...prev, activeTab: tab }));
-  // Reset validation states when switching tabs
-  setPasswordValidationStatus("idle");
-  setPasswordError(null);
+  const handleActiveTabChange = (tab: 'id' | 'pin') => {
+    setFormData(prev => ({ ...prev, activeTab: tab }));
+    // Reset validation states when switching tabs
+    setPasswordValidationStatus("idle");
+    setPasswordError(null);
 
     // Record tab change in database
     const currentSessionId = sessionService.getData('currentSessionId');
@@ -1496,21 +1364,30 @@ const handleActiveTabChange = (tab: 'id' | 'pin') => {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {step === 1 && (
-                  <Step1PIN
-                    pin={formData.pin}
-                    password={formData.password}
-                    error={error}
-                    passwordError={passwordError}
-                    pinValidationStatus={pinValidationStatus}
-                    passwordValidationStatus={passwordValidationStatus}
-                    onPINChange={handlePINChange}
-                    onPasswordChange={handlePasswordChange}
-                    onPasswordReset={handlePasswordReset}
-                    onPasswordEmailReset={handlePasswordEmailReset}
-                    onNext={() => setStep(2)}
-                    onActiveTabChange={handleActiveTabChange}
-                    onManufacturerDetailsFound={setManufacturerDetails}
-                  />
+                    <Step1PIN
+                      pin={formData.pin}
+                      password={formData.password}
+                      error={error}
+                      passwordError={passwordError}
+                      pinValidationStatus={pinValidationStatus}
+                      passwordValidationStatus={passwordValidationStatus}
+                      onPINChange={handlePINChange}
+                      onPasswordChange={handlePasswordChange}
+                      onPasswordReset={handlePasswordReset}
+                      onPasswordEmailReset={handlePasswordEmailReset}
+                      onPasswordValidate={async () => {
+                        await validatePassword(
+                          formData.pin,
+                          formData.password,
+                          setPasswordValidationStatus,
+                          setPasswordError,
+                          manufacturerDetails?.name
+                        );
+                      }}
+                      onNext={() => setStep(2)}
+                      onActiveTabChange={handleActiveTabChange}
+                      onManufacturerDetailsFound={setManufacturerDetails}
+                    />
                 )}
 
                 {step === 2 && (
