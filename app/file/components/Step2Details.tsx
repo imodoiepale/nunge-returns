@@ -4,6 +4,8 @@
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { User, Mail, Building2, MapPin, ArrowRight, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import SessionManagementService from "@/src/sessionManagementService"
@@ -11,12 +13,12 @@ import { Step2Props } from "../lib/types"
 
 const sessionService = new SessionManagementService()
 
-export function Step2Details({ loading, manufacturerDetails, onBack, onNext }: Step2Props) {
+export function Step2Details({ loading, manufacturerDetails, residentType, setResidentType, onBack, onNext }: Step2Props) {
     // Record step view in database and check for existing data
     useEffect(() => {
         const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId && manufacturerDetails) {
-            try {   
+            try {
                 // Record the view in the database
                 supabase
                     .from('session_activities')
@@ -32,7 +34,7 @@ export function Step2Details({ loading, manufacturerDetails, onBack, onNext }: S
                     }])
                     .then(() => console.log('[DB] Recorded step 2 view in database'))
                     .catch(error => console.error('[DB ERROR] Failed to record step 2 view:', error));
-                
+
                 // Check if we have previously saved step data
                 supabase
                     .from('session_steps')
@@ -44,7 +46,7 @@ export function Step2Details({ loading, manufacturerDetails, onBack, onNext }: S
                             console.error('[DB ERROR] Failed to fetch saved step data:', error);
                             return;
                         }
-                        
+
                         if (data && data.length > 0) {
                             console.log('[DB] Found previously saved step data:', data[0]);
                             // We don't need to do anything here as the parent component already has the manufacturerDetails
@@ -95,8 +97,8 @@ export function Step2Details({ loading, manufacturerDetails, onBack, onNext }: S
                         step_data: manufacturerDetails,
                         is_completed: true,
                         completed_at: new Date().toISOString()
-                    }], { 
-                        onConflict: 'session_id,step_name' 
+                    }], {
+                        onConflict: 'session_id,step_name'
                     })
                     .then(() => console.log('[DB] Recorded step 2 completion in database'))
                     .catch(error => console.error('[DB ERROR] Failed to record step 2 completion:', error));
@@ -249,6 +251,29 @@ export function Step2Details({ loading, manufacturerDetails, onBack, onNext }: S
                     </div>
                 </div>
             </div>
+
+            {/* Resident/Non-Resident Selection - Only for Individuals */}
+            {isIndividual && setResidentType && (
+                <div className="p-4 rounded-lg border border-gray-200 bg-white/80">
+                    <div className="space-y-3">
+                        <Label htmlFor="residentType" className="text-base font-medium">
+                            Tax Obligation Type
+                        </Label>
+                        <Select value={residentType || "1"} onValueChange={setResidentType}>
+                            <SelectTrigger id="residentType" className="h-12 text-base">
+                                <SelectValue placeholder="Select obligation type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="1">Income Tax - Resident Individual</SelectItem>
+                                <SelectItem value="2">Income Tax Non-Resident Individual</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-sm text-muted-foreground">
+                            Select whether you are a resident or non-resident taxpayer
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Single navigation section with personalized buttons */}
 

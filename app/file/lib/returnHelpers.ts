@@ -369,7 +369,10 @@ export const debouncedValidatePassword = (
 
 export const fileNilReturn = async (credentials: {
   pin: string;
-  password: string
+  password: string;
+  name?: string;
+  email?: string;
+  resident_type?: string;
 }): Promise<FileReturnResponse> => {
   try {
     // Log filing attempt
@@ -407,11 +410,46 @@ export const fileNilReturn = async (credentials: {
       }
     }
 
-    // Simulate filing process
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Call the actual individual API endpoint
+    console.log('[FILING] Calling /api/individual endpoint...');
+    const response = await fetch('/api/individual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kra_pin: credentials.pin,
+        kra_password: credentials.password,
+        name: credentials.name || 'Unknown',
+        email: credentials.email || '',
+        resident_type: credentials.resident_type || '1',
+        session_id: currentSessionId,
+        return_id: uuidv4()
+      })
+    });
 
-    // Generate receipt number
-    const receiptNumber = `NR${Math.random().toString().slice(2, 10)}`;
+    const data = await response.json();
+    console.log('[FILING] API response:', data);
+
+    // Check if employment income detected (requires payment)
+    if (data.requiresPayment) {
+      console.log('[FILING] Employment income detected, returning payment requirement');
+      return {
+        status: 'error',
+        message: data.message,
+        requiresPayment: true,
+        periodFrom: data.periodFrom,
+        periodTo: data.periodTo,
+        pendingYears: data.pendingYears,
+        extraCharge: data.extraCharge,
+        refundAmount: data.refundAmount || 30
+      };
+    }
+
+    if (!response.ok || !data.success) {
+      const errorMsg = data.error || data.message || 'Unable to file return. Please check your credentials and try again.';
+      throw new Error(errorMsg);
+    }
+
+    const receiptNumber = data.receipt_url ? `ACK-${Date.now()}` : `NR${Math.random().toString().slice(2, 10)}`;
 
     // Log successful filing
     if (currentSessionId) {

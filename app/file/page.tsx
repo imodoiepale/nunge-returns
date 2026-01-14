@@ -48,6 +48,7 @@ export default function FilePage() {
     activeTab: 'pin'
   })
   const [manufacturerDetails, setManufacturerDetails] = useState<ManufacturerDetails | null>(null)
+  const [residentType, setResidentType] = useState("1") // Default to resident
   const [paymentStatus, setPaymentStatus] = useState<"Not Paid" | "Processing" | "Paid">("Not Paid")
   const [filingStatus, setFilingStatus] = useState<FilingStatus>({
     loggedIn: false,
@@ -72,6 +73,8 @@ export default function FilePage() {
   const [receiptNumber, setReceiptNumber] = useState(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [paymentInfo, setPaymentInfo] = useState<any>(null)
 
   // Fetch user count
   useEffect(() => {
@@ -146,6 +149,51 @@ export default function FilePage() {
     };
 
     initializeSession();
+  }, []);
+
+  // Check for employment income info in sessionStorage
+  useEffect(() => {
+    console.log('[APP] 🔄 Setting up employment income polling...')
+
+    const checkEmploymentIncome = () => {
+      const employmentInfo = window.sessionStorage.getItem('employmentIncomeInfo');
+
+      if (employmentInfo) {
+        console.log('[APP] 🎯 Found employment income info in sessionStorage!')
+        console.log('[APP] Raw data:', employmentInfo)
+
+        try {
+          const info = JSON.parse(employmentInfo);
+          console.log('[APP] ✅ Parsed employment income info:', info);
+          console.log('[APP] 📊 Setting payment info state...')
+          setPaymentInfo(info);
+          console.log('[APP] 🔔 Setting showPaymentDialog to true...')
+          setShowPaymentDialog(true);
+          console.log('[APP] ✅ Dialog state updated!')
+
+          // Clear it after showing
+          window.sessionStorage.removeItem('employmentIncomeInfo');
+          console.log('[APP] 🗑️ Cleared sessionStorage')
+        } catch (e) {
+          console.error('[APP ERROR] ❌ Failed to parse employment income info:', e);
+        }
+      }
+    };
+
+    // Check immediately on mount
+    console.log('[APP] 🚀 Initial check for employment income...')
+    checkEmploymentIncome();
+
+    // Set up an interval to check periodically (every 500ms)
+    console.log('[APP] ⏰ Starting 500ms polling interval...')
+    const interval = setInterval(() => {
+      checkEmploymentIncome();
+    }, 500);
+
+    return () => {
+      console.log('[APP] 🛑 Stopping employment income polling')
+      clearInterval(interval);
+    };
   }, []);
 
   // Session timer effect
@@ -1364,36 +1412,38 @@ export default function FilePage() {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {step === 1 && (
-                    <Step1PIN
-                      pin={formData.pin}
-                      password={formData.password}
-                      error={error}
-                      passwordError={passwordError}
-                      pinValidationStatus={pinValidationStatus}
-                      passwordValidationStatus={passwordValidationStatus}
-                      onPINChange={handlePINChange}
-                      onPasswordChange={handlePasswordChange}
-                      onPasswordReset={handlePasswordReset}
-                      onPasswordEmailReset={handlePasswordEmailReset}
-                      onPasswordValidate={async () => {
-                        await validatePassword(
-                          formData.pin,
-                          formData.password,
-                          setPasswordValidationStatus,
-                          setPasswordError,
-                          manufacturerDetails?.name
-                        );
-                      }}
-                      onNext={() => setStep(2)}
-                      onActiveTabChange={handleActiveTabChange}
-                      onManufacturerDetailsFound={setManufacturerDetails}
-                    />
+                  <Step1PIN
+                    pin={formData.pin}
+                    password={formData.password}
+                    error={error}
+                    passwordError={passwordError}
+                    pinValidationStatus={pinValidationStatus}
+                    passwordValidationStatus={passwordValidationStatus}
+                    onPINChange={handlePINChange}
+                    onPasswordChange={handlePasswordChange}
+                    onPasswordReset={handlePasswordReset}
+                    onPasswordEmailReset={handlePasswordEmailReset}
+                    onPasswordValidate={async () => {
+                      await validatePassword(
+                        formData.pin,
+                        formData.password,
+                        setPasswordValidationStatus,
+                        setPasswordError,
+                        manufacturerDetails?.name
+                      );
+                    }}
+                    onNext={() => setStep(2)}
+                    onActiveTabChange={handleActiveTabChange}
+                    onManufacturerDetailsFound={setManufacturerDetails}
+                  />
                 )}
 
                 {step === 2 && (
                   <Step2Details
                     loading={loading}
                     manufacturerDetails={manufacturerDetails}
+                    residentType={residentType}
+                    setResidentType={setResidentType}
                     onBack={() => setStep(1)}
                     onNext={() => setStep(3)}
                   />
@@ -1486,6 +1536,105 @@ export default function FilePage() {
           </DialogContent>
         </Dialog>
 
+        {/* Employment Income / Payment Dialog */}
+        <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+          <DialogContent className="w-[90%] max-w-[500px] rounded-lg p-6">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-orange-500" />
+                {paymentInfo?.reason === 'pending_years' ? 'Action Required: Pending Years' : 'Employment Income Detected'}
+              </DialogTitle>
+              <DialogDescription className="text-base space-y-3 pt-4">
+                <Alert variant={paymentInfo?.reason === 'pending_years' ? 'default' : 'destructive'}>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>
+                    {paymentInfo?.reason === 'pending_years' ? 'Pending Returns Found' : 'Cannot File NIL Return'}
+                  </AlertTitle>
+                  <AlertDescription>
+                    {paymentInfo?.message}
+                  </AlertDescription>
+                </Alert>
+
+                <div className="bg-muted p-4 rounded-lg space-y-2">
+                  <p className="font-semibold">Return Period:</p>
+                  <p className="text-sm">{paymentInfo?.periodFrom} to {paymentInfo?.periodTo}</p>
+
+                  {paymentInfo?.pendingYears > 0 && (
+                    <>
+                      <p className="font-semibold mt-3">Pending Years:</p>
+                      <p className="text-sm">{paymentInfo?.pendingYears} year(s)</p>
+
+                      <p className="font-semibold mt-3">Extra Charge:</p>
+                      <p className="text-lg font-bold text-primary">KES {paymentInfo?.extraCharge}</p>
+                    </>
+                  )}
+                </div>
+
+                {paymentInfo?.reason === 'pending_years' ? (
+                  <p className="text-sm text-muted-foreground">
+                    Please pay the extra charge for pending years to proceed with the filing process.
+                  </p>
+                ) : (
+                  <>
+                    {/* Refund Information for Employment Income */}
+                    <Alert className="bg-green-50 border-green-200">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertTitle className="text-green-800">Good News!</AlertTitle>
+                      <AlertDescription className="text-green-700">
+                        Since you cannot file a NIL return due to employment income, we will process a <strong>KES {paymentInfo?.refundAmount || 30}</strong> refund for you.
+                      </AlertDescription>
+                    </Alert>
+
+                    <p className="text-sm text-muted-foreground">
+                      We cannot file a NIL return for you as KRA records show you have employment income.
+                    </p>
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowPaymentDialog(false)}
+                className="w-full sm:w-auto"
+              >
+                {paymentInfo?.reason === 'pending_years' ? 'Cancel' : 'Close'}
+              </Button>
+
+              {paymentInfo?.reason === 'pending_years' ? (
+                <Button
+                  onClick={() => {
+                    setShowPaymentDialog(false);
+                    // Trigger the Step4Filing retry logic
+                    // We can find the button and click it to retry with payment flag
+                    // Or ideally update state to trigger it. 
+                    // For now, let's assume the user pays here (simulated) and we trigger retry
+                    // Finding the Step4Filing component to retry is tricky from here without context
+                    // Ideally we should pass a callback or event
+                    // Let's use a custom event
+                    const event = new CustomEvent('retryFilingWithPayment');
+                    window.dispatchEvent(event);
+                  }}
+                  className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-purple-700"
+                >
+                  Pay KES {paymentInfo?.extraCharge} & Proceed
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => {
+                    setShowPaymentDialog(false)
+                    // Redirect to regular return filing or just close
+                    // User requested NO redirection
+                  }}
+                  className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-purple-700"
+                >
+                  Acknowledge Refund
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Existing Session Dialog */}
         <Dialog open={showDialog} onOpenChange={setShowDialog}>
           <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
@@ -1502,7 +1651,6 @@ export default function FilePage() {
                 </p>
               </DialogDescription>
             </DialogHeader>
-
             <DialogFooter className="flex flex-col space-y-2">
               <Button
                 type="button"
@@ -1522,7 +1670,7 @@ export default function FilePage() {
           </DialogContent>
         </Dialog>
       </div>
-    </PageBackground>
+    </PageBackground >
   )
 }
 

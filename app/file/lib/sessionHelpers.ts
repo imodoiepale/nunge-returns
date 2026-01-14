@@ -536,10 +536,63 @@ export const handleSubmit = async (
                 console.log('[FILING] Filing return with tax authority for PIN:', formData.pin)
                 const result = await fileNilReturn({
                     pin: formData.pin,
-                    password: formData.password
+                    password: formData.password,
+                    name: formData.taxpayerName || formData.manufacturerName || 'Unknown',
+                    email: formData.email || '',
+                    resident_type: formData.resident_type || '1'
                 })
 
                 console.log('[FILING] Filing result:', result)
+                console.log('[FILING] Result type:', typeof result)
+                console.log('[FILING] Result.requiresPayment:', result.requiresPayment)
+                console.log('[FILING] Result keys:', Object.keys(result))
+
+                // Check if employment income detected (requires payment)
+                if (result.requiresPayment) {
+                    console.log('[FILING] Employment income detected, showing payment dialog')
+                    console.log('[FILING] Payment info:', {
+                        periodFrom: result.periodFrom,
+                        periodTo: result.periodTo,
+                        pendingYears: result.pendingYears,
+                        extraCharge: result.extraCharge,
+                        message: result.message
+                    })
+
+                    setError(`Employment Income Detected: ${result.message}`)
+                    setFilingStatus({
+                        loggedIn: false,
+                        filing: false,
+                        extracting: false,
+                        completed: false,
+                        error: result.message
+                    })
+
+                    // Store payment info for dialog display
+                    if (typeof window !== 'undefined') {
+                        const paymentData = {
+                            requiresPayment: true,
+                            periodFrom: result.periodFrom,
+                            periodTo: result.periodTo,
+                            pendingYears: result.pendingYears,
+                            extraCharge: result.extraCharge,
+                            refundAmount: result.refundAmount || 30,
+                            message: result.message
+                        }
+                        console.log('[FILING] Storing in sessionStorage:', paymentData)
+                        window.sessionStorage.setItem('employmentIncomeInfo', JSON.stringify(paymentData))
+                        console.log('[FILING] Stored in sessionStorage')
+
+                        // Verify it was stored
+                        const stored = window.sessionStorage.getItem('employmentIncomeInfo')
+                        console.log('[FILING] Verification - stored value:', stored)
+                    } else {
+                        console.error('[FILING] Window is undefined, cannot store in sessionStorage')
+                    }
+
+                    return
+                } else {
+                    console.log('[FILING] No employment income detected (requiresPayment is falsy)')
+                }
 
                 if (result.status === "success") {
                     console.log('[FILING] Filing successful, receipt number:', result.receiptNumber)
@@ -662,7 +715,16 @@ export const handleSubmit = async (
                     console.error('[DB ERROR] Failed to update session with error status:', sessionError)
                 }
 
-                setError(filingError.message || 'Failed to complete filing process')
+                // Provide more specific error message
+                let errorMsg = filingError.message || 'Unable to complete filing process';
+                if (filingError.message && filingError.message.includes('Employment Income')) {
+                    errorMsg = filingError.message;
+                } else if (filingError.message && filingError.message.includes('pending year')) {
+                    errorMsg = filingError.message;
+                } else if (!filingError.message) {
+                    errorMsg = 'Filing process encountered an error. Please verify your credentials and try again.';
+                }
+                setError(errorMsg)
                 return
             }
         } else {

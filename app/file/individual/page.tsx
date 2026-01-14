@@ -4,8 +4,10 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { PageBackground } from "@/components/ui/page-background"
 import { Step1ID, Step2Verify, Step3Password } from "../components/IndividualFileSteps"
 import { FadeIn } from "@/components/core/fade-in"
@@ -76,6 +78,7 @@ export default function IndividualFilePage() {
 
     // Step 2: User Details
     const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
+    const [residentType, setResidentType] = useState("1") // Default to resident
 
     // Step 3: Password
     const [password, setPassword] = useState("")
@@ -83,6 +86,10 @@ export default function IndividualFilePage() {
     const [confirmPassword, setConfirmPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
     const [requiresPasswordReset, setRequiresPasswordReset] = useState(false)
+
+    // Payment dialog state
+    const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+    const [paymentInfo, setPaymentInfo] = useState<any>(null)
 
     // Step 1: Fetch user details by ID
     const handleFetchByID = async () => {
@@ -142,7 +149,7 @@ export default function IndividualFilePage() {
         }
     }
 
-    // Step 3: Validate password
+    // Step 3: Validate password and file return
     const handleValidatePassword = async () => {
         setLoading(true)
         setError(null)
@@ -152,53 +159,58 @@ export default function IndividualFilePage() {
                 throw new Error("User details not found")
             }
 
-            const response = await fetch("/api/auth/validate-password", {
+            console.log('[UI] Filing individual return...')
+            const response = await fetch("/api/individual", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    pin: userDetails.pin,
-                    password: password,
-                    newPassword: requiresPasswordReset ? newPassword : null
+                    name: userDetails.name,
+                    kra_pin: userDetails.pin,
+                    kra_password: password,
+                    email: userDetails.email,
+                    resident_type: residentType
                 })
             })
 
             const data = await response.json()
 
+            console.log('[UI] Filing response:', data)
+            console.log('[UI] Response status:', response.status)
+            console.log('[UI] Response ok:', response.ok)
+            console.log('[UI] Data requiresPayment:', data.requiresPayment)
+
+            // Check if employment income detected (requires payment) - BEFORE checking response.ok
+            if (data && data.requiresPayment === true) {
+                console.log('[UI] Employment income detected, showing payment dialog')
+                console.log('[UI] Payment info:', data)
+                setPaymentInfo(data)
+                setShowPaymentDialog(true)
+                console.log('[UI] Dialog state set to true')
+                return
+            }
+
             if (!response.ok) {
-                throw new Error(data.error || "Failed to validate password")
+                throw new Error(data.error || "Failed to file return")
             }
 
-            // Handle different statuses
-            if (data.status === "valid") {
-                toast.success("Password validated successfully!")
-                // TODO: Proceed to next step (payment/filing)
-                router.push("/file/payment?type=individual")
-
-            } else if (data.status === "password_expired") {
-                setRequiresPasswordReset(true)
-                setError("Your password has expired. Please set a new password below.")
-                toast.error("Password expired - please reset it")
-
-            } else if (data.status === "invalid") {
-                throw new Error("Invalid password. Please check and try again.")
-
-            } else if (data.status === "locked") {
-                throw new Error("Your account has been locked. Please contact KRA.")
-
-            } else if (data.status === "cancelled") {
-                throw new Error("Your account has been cancelled. Please contact KRA.")
-
-            } else {
-                throw new Error(data.message || "Unable to validate password")
-            }
+            // Success - return filed
+            toast.success("Return filed successfully!")
+            router.push("/file/success")
 
         } catch (err: any) {
-            console.error("Error validating password:", err)
-            setError(err.message || "Failed to validate password. Please try again.")
-            toast.error(err.message || "Failed to validate password")
+            console.error("Error filing return:", err)
+            setError(err.message || "Failed to file return. Please try again.")
+            toast.error(err.message || "Failed to file return")
         } finally {
             setLoading(false)
         }
+    }
+
+    // Handle payment confirmation
+    const handlePaymentConfirm = async () => {
+        setShowPaymentDialog(false)
+        toast.info("Please proceed to file your regular return with the File Return option.")
+        // TODO: Redirect to regular return filing or payment page
     }
 
     return (
@@ -295,10 +307,11 @@ export default function IndividualFilePage() {
                                 setConfirmPassword={setConfirmPassword}
                                 showPassword={showPassword}
                                 setShowPassword={setShowPassword}
+                                residentType={residentType}
+                                setResidentType={setResidentType}
                                 onBack={() => {
                                     setStep(2)
                                     setError(null)
-                                    setRequiresPasswordReset(false)
                                 }}
                                 onValidate={handleValidatePassword}
                                 loading={loading}
@@ -307,6 +320,61 @@ export default function IndividualFilePage() {
                             />
                         )}
                     </div>
+
+                    {/* Payment Dialog */}
+                    <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+                        <DialogContent className="w-[90%] max-w-[500px] rounded-lg p-6">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl flex items-center gap-2">
+                                    <AlertCircle className="h-5 w-5 text-orange-500" />
+                                    Employment Income Detected
+                                </DialogTitle>
+                                <DialogDescription className="text-base space-y-3 pt-4">
+                                    <Alert variant="destructive">
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>Cannot File NIL Return</AlertTitle>
+                                        <AlertDescription>
+                                            {paymentInfo?.message}
+                                        </AlertDescription>
+                                    </Alert>
+
+                                    <div className="bg-muted p-4 rounded-lg space-y-2">
+                                        <p className="font-semibold">Return Period:</p>
+                                        <p className="text-sm">{paymentInfo?.periodFrom} to {paymentInfo?.periodTo}</p>
+
+                                        {paymentInfo?.pendingYears > 0 && (
+                                            <>
+                                                <p className="font-semibold mt-3">Pending Years:</p>
+                                                <p className="text-sm">{paymentInfo?.pendingYears} year(s)</p>
+
+                                                <p className="font-semibold mt-3">Extra Charge:</p>
+                                                <p className="text-lg font-bold text-primary">KES {paymentInfo?.extraCharge}</p>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <p className="text-sm text-muted-foreground">
+                                        You need to file a regular return instead of a NIL return. Please use the "File Return" option.
+                                    </p>
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowPaymentDialog(false)}
+                                    className="w-full sm:w-auto"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handlePaymentConfirm}
+                                    className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-purple-700"
+                                >
+                                    Proceed to File Return
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </div>
         </PageBackground>

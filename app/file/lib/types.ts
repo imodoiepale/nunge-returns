@@ -77,6 +77,12 @@ export interface FileReturnResponse {
   message: string;
   receiptNumber?: string;
   timestamp?: string;
+  requiresPayment?: boolean;
+  periodFrom?: string;
+  periodTo?: string;
+  pendingYears?: number;
+  extraCharge?: number;
+  refundAmount?: number;
   details?: {
     transactionId?: string;
     filingReference?: string;
@@ -207,8 +213,11 @@ export interface Step1Props {
 
 export interface Step2Props {
   manufacturerDetails: ManufacturerDetails | null;
+  residentType?: string;
+  setResidentType?: (value: string) => void;
   onNext: () => void;
   onBack: () => void;
+  loading?: boolean;
 }
 
 export interface Step3Props {

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, CheckCircle2, AlertCircle, User, Lock, Mail, Phone } from "lucide-react"
 import { FadeIn } from "@/components/core/fade-in"
 import { ScaleIn } from "@/components/core/scale-in"
@@ -300,6 +301,8 @@ interface Step3PasswordProps {
     setConfirmPassword: (value: string) => void
     showPassword: boolean
     setShowPassword: (value: boolean) => void
+    residentType: string
+    setResidentType: (value: string) => void
     onBack: () => void
     onValidate: () => void
     loading: boolean
@@ -316,6 +319,8 @@ export function Step3Password({
     setConfirmPassword,
     showPassword,
     setShowPassword,
+    residentType,
+    setResidentType,
     onBack,
     onValidate,
     loading,
@@ -401,6 +406,26 @@ export function Step3Password({
                     )}
 
                     <FadeIn delay={0.6}>
+                        <div className="space-y-2">
+                            <Label htmlFor="residentType" className="text-base">
+                                Tax Obligation Type
+                            </Label>
+                            <Select value={residentType} onValueChange={setResidentType}>
+                                <SelectTrigger id="residentType" className="h-12 text-lg">
+                                    <SelectValue placeholder="Select obligation type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1">Income Tax - Resident Individual</SelectItem>
+                                    <SelectItem value="2">Income Tax Non-Resident Individual</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-sm text-muted-foreground">
+                                Select whether you are a resident or non-resident taxpayer
+                            </p>
+                        </div>
+                    </FadeIn>
+
+                    <FadeIn delay={0.65}>
                         <div className="flex items-center space-x-2">
                             <input
                                 type="checkbox"
