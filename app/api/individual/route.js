@@ -588,14 +588,16 @@ export async function POST(req) {
 
             // Check if employment income was detected (requires payment)
             if (receiptPaths.requiresPayment) {
-                console.log('[EMPLOYMENT INCOME] User has employment income, returning payment info to UI');
+                console.log(`[PAYMENT REQUIRED] Reason: ${receiptPaths.reason}`);
                 await browser.close();
                 return NextResponse.json({
                     requiresPayment: true,
+                    reason: receiptPaths.reason,
                     periodFrom: receiptPaths.periodFrom,
                     periodTo: receiptPaths.periodTo,
                     pendingYears: receiptPaths.pendingYears,
                     extraCharge: receiptPaths.extraCharge,
+                    refundAmount: receiptPaths.refundAmount || 0,
                     message: receiptPaths.message
                 });
             }
@@ -761,16 +763,17 @@ export async function POST(req) {
 
         // Check if employment income was detected (requiresPayment flag)
         if (receiptPaths && receiptPaths.requiresPayment) {
-            console.log('[API] Returning employment income detection response');
+            console.log(`[API] Returning payment requirement: ${receiptPaths.reason}`);
             return NextResponse.json({
                 success: false,
                 requiresPayment: true,
+                reason: receiptPaths.reason,
                 periodFrom: receiptPaths.periodFrom,
                 periodTo: receiptPaths.periodTo,
                 pendingYears: receiptPaths.pendingYears,
                 extraCharge: receiptPaths.extraCharge,
                 message: receiptPaths.message,
-                refundAmount: 30, // 30 KES refund for employees
+                refundAmount: receiptPaths.refundAmount || 0,
                 timestamp: new Date().toISOString()
             });
         }
