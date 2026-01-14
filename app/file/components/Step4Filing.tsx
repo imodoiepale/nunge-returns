@@ -153,6 +153,7 @@ export function Step4Filing({
                         refundAmount: data.refundAmount || 30,
                         message: data.message
                     }
+                    console.log('[FILING] Storing in sessionStorage:', paymentData)
                     window.sessionStorage.setItem('employmentIncomeInfo', JSON.stringify(paymentData))
                 }
                 setLoading(false);
