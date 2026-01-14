@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -49,7 +49,6 @@ export function Step4Filing({
     const [receiptNumber, setReceiptNumber] = useState<string | null>(null)
     const [hasPaidExtra, setHasPaidExtra] = useState(false)
 
-    // Record step view in database
     useEffect(() => {
         const currentSessionId = sessionService.getData('currentSessionId');
         if (currentSessionId) {
@@ -84,7 +83,6 @@ export function Step4Filing({
         }
     }, [pin]);
 
-    // Track elapsed time
     useEffect(() => {
         let timer: NodeJS.Timeout
 
@@ -99,206 +97,7 @@ export function Step4Filing({
         }
     }, [filingStatus.filing, filingStatus.completed])
 
-    // Listen for retry event from page.tsx dialog
-    useEffect(() => {
-        const handleRetry = () => {
-            console.log('Retrying filing with payment flag...');
-            setHasPaidExtra(true);
-            handleFileReturns(true);
-        };
-
-        window.addEventListener('retryFilingWithPayment', handleRetry);
-        return () => window.removeEventListener('retryFilingWithPayment', handleRetry);
-    }, [pin, password, hasPaidExtra]);
-
-    // Simulate filing process visualization
-    useEffect(() => {
-        if (filingStatus.loggedIn) {
-            const steps = [0, 1, 2, 3]
-            let currentIndex = 0
-
-            // Record filing start in database
-            const currentSessionId = sessionService.getData('currentSessionId');
-            if (currentSessionId) {
-                try {
-                    supabase
-                        .from('session_activities')
-                        .insert([{
-                            session_id: currentSessionId,
-                            activity_type: 'form_submit',
-                            description: 'Filing process started',
-                            metadata: {
-                                pin: pin,
-                                step: 4
-                            }
-                        }])
-                        .then(() => console.log('[DB] Recorded filing start in database'))
-                        .catch(error => console.error('[DB ERROR] Failed to record filing start:', error));
-
-                    // Create return record
-                    supabase
-                        .from('returns')
-                        .insert([{
-                            session_id: currentSessionId,
-                            return_type: 'individual',
-                            is_nil_return: true,
-                            status: 'pending',
-                            payment_status: 'paid',
-                            email: formData?.email || null,
-                            name: formData?.manufacturerName || null,
-                            return_data: {
-                                pin: pin,
-                                filing_date: new Date().toISOString()
-                            }
-                        }])
-                        .then(result => {
-                            console.log('[DB] Created return record:', result);
-
-                            // Get return ID for later updates
-                            if (result.data && result.data[0]?.id) {
-                                sessionService.saveData('currentReturnId', result.data[0].id);
-                            }
-                        })
-                        .catch(error => console.error('[DB ERROR] Failed to create return record:', error));
-                } catch (dbError) {
-                    console.error('[DB ERROR] Error preparing filing records:', dbError);
-                }
-            }
-
-            const interval = setInterval(() => {
-                if (currentIndex < steps.length) {
-                    setCurrentStep(steps[currentIndex])
-
-                    // Record filing step in database
-                    if (currentSessionId) {
-                        try {
-                            // Determine which filing step this is
-                            let stepDescription = '';
-                            switch (currentIndex) {
-                                case 0:
-                                    stepDescription = 'Logging in to KRA';
-                                    break;
-                                case 1:
-                                    stepDescription = 'Filing tax return';
-                                    break;
-                                case 2:
-                                    stepDescription = 'Extracting receipt';
-                                    break;
-                                case 3:
-                                    stepDescription = 'Filing completed';
-                                    // Generate receipt number on completion
-                                    const newReceiptNumber = `NR${Math.random().toString().slice(2, 10)}`;
-                                    setReceiptNumber(newReceiptNumber);
-
-                                    // Update return with receipt number
-                                    const returnId = sessionService.getData('currentReturnId');
-                                    if (returnId) {
-                                        supabase
-                                            .from('returns')
-                                            .update({
-                                                status: 'completed',
-                                                updated_at: new Date().toISOString(),
-                                                acknowledgment_number: newReceiptNumber
-                                            })
-                                            .eq('id', returnId)
-                                            .then(() => console.log('[DB] Updated return with completion and receipt number'))
-                                            .catch(error => console.error('[DB ERROR] Failed to update return with receipt:', error));
-                                    }
-
-                                    // Update session with filing completion
-                                    supabase
-                                        .from('sessions')
-                                        .update({
-                                            status: 'completed',
-                                            updated_at: new Date().toISOString(),
-                                            form_data: {
-                                                pin_number: pin,
-                                                receiptNumber: newReceiptNumber,
-                                                filing_completed_at: new Date().toISOString()
-                                            }
-                                        })
-                                        .eq('id', currentSessionId)
-                                        .then(() => console.log('[DB] Updated session with filing completion'))
-                                        .catch(error => console.error('[DB ERROR] Failed to update session with completion:', error));
-                                    break;
-                            }
-
-                            supabase
-                                .from('session_activities')
-                                .insert([{
-                                    session_id: currentSessionId,
-                                    activity_type: 'form_submit',
-                                    description: stepDescription,
-                                    metadata: {
-                                        step: 4,
-                                        filing_step: currentIndex,
-                                        pin: pin
-                                    }
-                                }])
-                                .then(() => console.log(`[DB] Recorded filing step ${currentIndex} in database`))
-                                .catch(error => console.error(`[DB ERROR] Failed to record filing step ${currentIndex}:`, error));
-                        } catch (dbError) {
-                            console.error('[DB ERROR] Error recording filing step:', dbError);
-                        }
-                    }
-
-                    if (currentIndex === steps.length - 1) {
-                        // Record filing completion in database
-                        if (currentSessionId) {
-                            try {
-                                supabase
-                                    .from('session_activities')
-                                    .insert([{
-                                        session_id: currentSessionId,
-                                        activity_type: 'form_submit',
-                                        description: 'Filing completed successfully',
-                                        metadata: {
-                                            pin_number: pin,
-                                            step: 4,
-                                            elapsed_time: sessionStartTime ?
-                                                Math.round((new Date().getTime() - sessionStartTime.getTime()) / 1000) : null
-                                        }
-                                    }])
-                                    .then(() => console.log('[DB] Recorded filing completion in database'))
-                                    .catch(error => console.error('[DB ERROR] Failed to record filing completion:', error));
-
-                                // Record step completion
-                                supabase
-                                    .from('session_steps')
-                                    .insert([{
-                                        session_id: currentSessionId,
-                                        step_name: 'filing',
-                                        step_data: {
-                                            pin_number: pin,
-                                            receipt_number: receiptNumber,
-                                            filing_date: new Date().toISOString()
-                                        },
-                                        is_completed: true,
-                                        updated_at: new Date().toISOString(),
-                                    }])
-                                    .then(() => console.log('[DB] Recorded step 4 completion in database'))
-                                    .catch(error => console.error('[DB ERROR] Failed to record step 4 completion:', error));
-                            } catch (dbError) {
-                                console.error('[DB ERROR] Error recording filing completion:', dbError);
-                            }
-                        }
-                    }
-
-                    currentIndex++
-                } else {
-                    clearInterval(interval)
-                }
-            }, 1000)
-
-            return () => clearInterval(interval)
-        }
-    }, [filingStatus.loggedIn, pin, sessionStartTime, formData, receiptNumber]);
-
-    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onPasswordChange(e.target.value)
-    }
-
-    const handleFileReturns = async (retryWithPayment = false) => {
+    const handleFileReturns = useCallback(async (retryWithPayment = false) => {
         setLoading(true);
         setLocalError(null);
 
@@ -364,7 +163,6 @@ export function Step4Filing({
                 console.log('[FILING] Filing successful:', data);
                 if (data.receipt_number) setReceiptNumber(data.receipt_number);
 
-                // Update filing status to trigger the simulation in this component
                 setFilingStatus({
                     loggedIn: true,
                     filing: true,
@@ -392,14 +190,73 @@ export function Step4Filing({
         } finally {
             setLoading(false);
         }
-    };
+    }, [pin, password, formData, hasPaidExtra, onError, setFilingStatus]);
+
+    useEffect(() => {
+        const handleRetry = () => {
+            console.log('Retrying filing with payment flag...');
+            setHasPaidExtra(true);
+            handleFileReturns(true);
+        };
+
+        window.addEventListener('retryFilingWithPayment', handleRetry);
+        return () => window.removeEventListener('retryFilingWithPayment', handleRetry);
+    }, [handleFileReturns]);
+
+    useEffect(() => {
+        if (filingStatus.loggedIn && !filingStatus.completed) {
+            const steps = [0, 1, 2, 3]
+            let currentIndex = 0
+
+            const currentSessionId = sessionService.getData('currentSessionId');
+
+            const interval = setInterval(() => {
+                if (currentIndex < steps.length) {
+                    setCurrentStep(steps[currentIndex])
+
+                    if (currentSessionId) {
+                        try {
+                            let stepDescription = '';
+                            switch (currentIndex) {
+                                case 0: stepDescription = 'Logging in to KRA'; break;
+                                case 1: stepDescription = 'Filing tax return'; break;
+                                case 2: stepDescription = 'Extracting receipt'; break;
+                                case 3:
+                                    stepDescription = 'Filing completed';
+                                    setFilingStatus(prev => ({ ...prev, completed: true }));
+                                    break;
+                            }
+
+                            supabase
+                                .from('session_activities')
+                                .insert([{
+                                    session_id: currentSessionId,
+                                    activity_type: 'form_submit',
+                                    description: stepDescription,
+                                    metadata: { step: 4, filing_step: currentIndex, pin: pin }
+                                }])
+                                .then(() => console.log(`[DB] Recorded filing step ${currentIndex}`))
+                                .catch(error => console.error(`[DB ERROR] Failed to record step ${currentIndex}:`, error));
+                        } catch (dbError) {
+                            console.error('[DB ERROR] Error recording filing step:', dbError);
+                        }
+                    }
+                    currentIndex++
+                } else {
+                    clearInterval(interval)
+                }
+            }, 1500)
+
+            return () => clearInterval(interval)
+        }
+    }, [filingStatus.loggedIn, filingStatus.completed, pin, setFilingStatus]);
+
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onPasswordChange(e.target.value)
+    }
 
     const handleDownloadReceipt = (type: string) => {
         onDownloadReceipt(type);
-    };
-
-    const handleEndSession = () => {
-        onEndSession();
     };
 
     if (filingStatus.completed) {
@@ -422,7 +279,7 @@ export function Step4Filing({
                                     </div>
                                     <div>
                                         <div className="text-muted-foreground">Receipt Number:</div>
-                                        <div className="font-medium">{receiptNumber}</div>
+                                        <div className="font-medium">{receiptNumber || "Pending..."}</div>
                                     </div>
                                 </div>
                                 <div className="space-y-4 text-left">
