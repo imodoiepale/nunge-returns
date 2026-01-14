@@ -1471,6 +1471,7 @@ export default function FilePage() {
                     onPasswordChange={(value) => setFormData(prev => ({ ...prev, password: value }))}
                     onDownloadReceipt={handleDownloadReceipt}
                     onEndSession={handleEndSession}
+                    setFilingStatus={setFilingStatus}
                   />
                 )}
 
@@ -1586,7 +1587,7 @@ export default function FilePage() {
                     </Alert>
 
                     <p className="text-sm text-muted-foreground">
-                      We cannot file a NIL return for you as KRA records show you have employment income.
+                      We cannot file a NIL return for you as KRA records show you have employment income. You need to file a regular return instead.
                     </p>
                   </>
                 )}
