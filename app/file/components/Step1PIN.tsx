@@ -525,7 +525,7 @@ export default function Step1PIN({
                                     value={idNumber}
                                     onChange={(e) => setIdNumber(e.target.value.replace(/\D/g, ''))}
                                     placeholder="Enter your 8-digit ID number"
-                                    maxLength={8}
+                                    // maxLength={8}
                                     required
                                     className="text-lg h-12"
                                 />
