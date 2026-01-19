@@ -125,7 +125,7 @@ async function loginToKRA(page, company) {
 }
 
 // Function to navigate to file return
-async function navigateToFileReturn(page, company) {
+async function navigateToFileReturn(page, company, obligationId = '7') {
     console.log('Hovering over Returns menu...');
     const returnsSelector = '#ddtopmenubar > ul > li > a[rel="Returns"]';
     await page.hover(returnsSelector);
@@ -142,8 +142,8 @@ async function navigateToFileReturn(page, company) {
     await page.waitForLoadState("networkidle");
     console.log('Successfully navigated to File Nil Return page');
 
-    console.log('Selecting registration type...');
-    await page.locator('#regType').selectOption('7');
+    console.log(`Selecting obligation type: ${obligationId}...`);
+    await page.locator('#regType').selectOption(obligationId);
     console.log('Clicking Next button...');
     await page.getByRole('button', { name: 'Next' }).click();
 
@@ -262,7 +262,8 @@ export async function POST(req) {
             kra_pin,
             kra_password,
             session_id,
-            return_id
+            return_id,
+            obligation_id
         } = requestData;
 
         if (!company_name || !kra_pin || !kra_password) {
@@ -271,6 +272,10 @@ export async function POST(req) {
                 { status: 400 }
             );
         }
+
+        // Use provided obligation_id or default to '7' (PAYE)
+        const selectedObligationId = obligation_id || '7';
+        console.log('Filing nil return for obligation ID:', selectedObligationId);
 
         // Create workbook for logging
         const workbook = new ExcelJS.Workbook();
@@ -297,11 +302,11 @@ export async function POST(req) {
 
 
         // Then add this before launching browser:
-console.log('System details:');
-console.log(`- Platform: ${process.platform}`);
-console.log(`- Architecture: ${process.arch}`);
-console.log(`- Node version: ${process.version}`);
-console.log(`- Download path: ${downloadFolderPath}`);
+        console.log('System details:');
+        console.log(`- Platform: ${process.platform}`);
+        console.log(`- Architecture: ${process.arch}`);
+        console.log(`- Node version: ${process.version}`);
+        console.log(`- Download path: ${downloadFolderPath}`);
 
         // Launch browser (non-headless for UI interaction)
         const browser = await chromium.launch({
@@ -325,8 +330,8 @@ console.log(`- Download path: ${downloadFolderPath}`);
             // Log in to KRA
             await loginToKRA(page, company);
 
-            // File the return
-            receiptPaths = await navigateToFileReturn(page, company);
+            // File the return with selected obligation
+            receiptPaths = await navigateToFileReturn(page, company, selectedObligationId);
 
             // Check for potential issues (password expired, account locked, etc.)
             let isPasswordExpired, isAccountLocked, isInvalidLogin, menuItemNotFound;
@@ -462,6 +467,7 @@ console.log(`- Download path: ${downloadFolderPath}`);
             status,
             company_name,
             kra_pin,
+            obligation_id: selectedObligationId,
             receipt_url: receiptPaths.storageUrl,
             timestamp: new Date().toISOString()
         });

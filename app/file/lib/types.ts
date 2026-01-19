@@ -215,6 +215,8 @@ export interface Step2Props {
   manufacturerDetails: ManufacturerDetails | null;
   residentType?: string;
   setResidentType?: (value: string) => void;
+  selectedObligations?: string[];
+  setSelectedObligations?: (value: string[]) => void;
   onNext: () => void;
   onBack: () => void;
   loading?: boolean;

@@ -80,6 +80,8 @@ export function ReturnSteps() {
     const [passwordValidationStatus, setPasswordValidationStatus] = useState<ValidationStatus>("idle")
     const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null)
     const [receiptNumber, setReceiptNumber] = useState<string | null>(null)
+    const [residentType, setResidentType] = useState<string>("1")
+    const [selectedObligations, setSelectedObligations] = useState<string[]>([])
 
     // Initialize session on component mount
     useEffect(() => {
@@ -704,6 +706,10 @@ export function ReturnSteps() {
                 <Step2Details
                     loading={loading}
                     manufacturerDetails={manufacturerDetails}
+                    residentType={residentType}
+                    setResidentType={setResidentType}
+                    selectedObligations={selectedObligations}
+                    setSelectedObligations={setSelectedObligations}
                     onBack={handlePreviousStep}
                     onNext={handleNextStep}
                 />

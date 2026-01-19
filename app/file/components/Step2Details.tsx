@@ -10,10 +10,11 @@ import { User, Mail, Building2, MapPin, ArrowRight, ArrowLeft } from 'lucide-rea
 import { supabase } from '@/lib/supabaseClient'
 import SessionManagementService from "@/src/sessionManagementService"
 import { Step2Props } from "../lib/types"
+import CompanyObligationSelector from "./CompanyObligationSelector"
 
 const sessionService = new SessionManagementService()
 
-export function Step2Details({ loading, manufacturerDetails, residentType, setResidentType, onBack, onNext }: Step2Props) {
+export function Step2Details({ loading, manufacturerDetails, residentType, setResidentType, selectedObligations, setSelectedObligations, onBack, onNext }: Step2Props) {
     // Record step view in database and check for existing data
     useEffect(() => {
         const currentSessionId = sessionService.getData('currentSessionId');
@@ -82,6 +83,7 @@ export function Step2Details({ loading, manufacturerDetails, residentType, setRe
     }
 
     const isIndividual = manufacturerDetails.pin.startsWith('A')
+    const isCompany = manufacturerDetails.pin.startsWith('P')
 
     const handleConfirm = () => {
         // Record step completion in database
@@ -273,6 +275,15 @@ export function Step2Details({ loading, manufacturerDetails, residentType, setRe
                         </p>
                     </div>
                 </div>
+            )}
+
+            {/* Company Obligation Selector - Only for Companies */}
+            {isCompany && setSelectedObligations && (
+                <CompanyObligationSelector
+                    pin={manufacturerDetails.pin}
+                    onObligationsSelected={setSelectedObligations}
+                    selectedObligations={selectedObligations || []}
+                />
             )}
 
             {/* Single navigation section with personalized buttons */}

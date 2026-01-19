@@ -364,7 +364,7 @@ export default function Step1PIN({
                         console.error('[DB ERROR] Failed to record activity:', activityError);
                     } else {
                         console.log('[DB] Activity recorded:', activityData);
-                    }
+                    }   
                 } catch (dbError) {
                     console.error('[DB ERROR] Error updating database:', dbError);
                 }
