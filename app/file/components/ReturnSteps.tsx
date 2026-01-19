@@ -151,6 +151,40 @@ export function ReturnSteps() {
 
                     // Extract manufacturer details
                     const manufacturerInfo = extractManufacturerDetails(details);
+
+                    // If it's a company PIN (starts with P), fetch obligations automatically
+                    if (newPin.toUpperCase().startsWith('P')) {
+                        console.log('[OBLIGATIONS] Company PIN detected, fetching obligations...');
+                        try {
+                            const obligationsResponse = await fetch('/api/company/check-obligations', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ pin: newPin })
+                            });
+
+                            const obligationsData = await obligationsResponse.json();
+
+                            if (obligationsResponse.ok && obligationsData.success) {
+                                console.log('[OBLIGATIONS] Fetched obligations:', obligationsData.obligations);
+                                manufacturerInfo.obligationsData = {
+                                    taxpayerName: obligationsData.taxpayerName,
+                                    pinStatus: obligationsData.pinStatus,
+                                    itaxStatus: obligationsData.itaxStatus,
+                                    obligations: obligationsData.obligations,
+                                    timestamp: obligationsData.timestamp
+                                };
+
+                                // Don't auto-select - let user choose which obligations to file
+                                setSelectedObligations([]);
+                                console.log('[OBLIGATIONS] Obligations loaded, none selected by default');
+                            } else {
+                                console.error('[OBLIGATIONS] Failed to fetch obligations:', obligationsData.error);
+                            }
+                        } catch (obligationsError) {
+                            console.error('[OBLIGATIONS] Error fetching obligations:', obligationsError);
+                        }
+                    }
+
                     setManufacturerDetails(manufacturerInfo);
                     setFormData(prev => ({
                         ...prev,

@@ -34,12 +34,7 @@ async function loginToKRAPinChecker(page, pin) {
             }
 
             worker = await createWorker('eng', 1, {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        // Suppress verbose logging
-                    }
-                },
-                errorHandler: err => console.error('Tesseract error:', err)
+                workerPath: path.join(process.cwd(), 'node_modules', 'tesseract.js', 'src', 'worker-script', 'node', 'index.js')
             });
 
             const ret = await worker.recognize(imagePath);
@@ -234,7 +229,9 @@ export async function POST(req) {
         // Launch browser
         browser = await chromium.launch({
             headless: false,
-            args: ['--start-maximized']
+            channel: "chrome",
+            // args: ['--start-maximized'],
+            // ignoreDefaultArgs: ['--headless']
         });
 
         const context = await browser.newContext({
@@ -246,38 +243,75 @@ export async function POST(req) {
         page.setDefaultNavigationTimeout(60000);
         page.setDefaultTimeout(60000);
 
-        // Login to PIN Checker
-        await loginToKRAPinChecker(page, pin);
+        // Retry logic for the complete flow
+        const maxRetries = 3;
+        let lastError = null;
+        let extractedData = null;
 
-        // Check for errors
-        const hasError = await page.evaluate(() => {
-            const bodyText = document.body.textContent || '';
-            return bodyText.includes('An Error has occurred');
-        });
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`[Attempt ${attempt}/${maxRetries}] Starting PIN checker flow for ${pin}`);
 
-        if (hasError) {
-            await browser.close();
-            return NextResponse.json({
-                error: "An error occurred while checking PIN",
-                timestamp: new Date().toISOString()
-            }, { status: 400 });
+                // Step 1: Login to PIN Checker with CAPTCHA solving
+                console.log(`[Attempt ${attempt}/${maxRetries}] Logging in to KRA PIN Checker...`);
+                await loginToKRAPinChecker(page, pin);
+                console.log(`[Attempt ${attempt}/${maxRetries}] ✓ Login successful`);
+
+                // Step 2: Check for errors on the page
+                const hasError = await page.evaluate(() => {
+                    const bodyText = document.body.textContent || '';
+                    return bodyText.includes('An Error has occurred');
+                });
+
+                if (hasError) {
+                    throw new Error("An error occurred on the KRA page");
+                }
+
+                // Step 3: Click Obligation Details
+                console.log(`[Attempt ${attempt}/${maxRetries}] Clicking Obligation Details...`);
+                const clickSuccess = await clickObligationDetails(page);
+                if (!clickSuccess) {
+                    throw new Error("Failed to click Obligation Details - timeout");
+                }
+                console.log(`[Attempt ${attempt}/${maxRetries}] ✓ Obligation Details clicked`);
+
+                // Step 4: Extract obligation data
+                console.log(`[Attempt ${attempt}/${maxRetries}] Extracting obligation data...`);
+                extractedData = await extractObligationData(page);
+                console.log(`[Attempt ${attempt}/${maxRetries}] ✓ Data extracted successfully`);
+
+                // If we got here, everything succeeded
+                console.log(`[Attempt ${attempt}/${maxRetries}] ✓ Complete flow successful!`);
+                break;
+
+            } catch (error) {
+                lastError = error;
+                console.error(`[Attempt ${attempt}/${maxRetries}] ✗ Failed:`, error.message);
+
+                if (attempt < maxRetries) {
+                    console.log(`[Attempt ${attempt}/${maxRetries}] Retrying...`);
+                    // Navigate back to start for retry
+                    try {
+                        await page.goto("https://itax.kra.go.ke/KRA-Portal/", { waitUntil: 'domcontentloaded' });
+                    } catch (navError) {
+                        console.error(`Navigation error during retry:`, navError.message);
+                    }
+                } else {
+                    console.error(`[Attempt ${attempt}/${maxRetries}] All retry attempts exhausted`);
+                }
+            }
         }
-
-        // Click Obligation Details
-        const clickSuccess = await clickObligationDetails(page);
-        if (!clickSuccess) {
-            await browser.close();
-            return NextResponse.json({
-                error: "Failed to access Obligation Details",
-                timestamp: new Date().toISOString()
-            }, { status: 400 });
-        }
-
-        // Extract obligation data
-        const extractedData = await extractObligationData(page);
 
         // Close browser
         await browser.close();
+
+        // Check if we succeeded
+        if (!extractedData) {
+            return NextResponse.json({
+                error: lastError?.message || "Failed to extract obligations after all retries",
+                timestamp: new Date().toISOString()
+            }, { status: 500 });
+        }
 
         // Map obligations to UI-friendly format with obligation IDs
         const obligationMapping = {

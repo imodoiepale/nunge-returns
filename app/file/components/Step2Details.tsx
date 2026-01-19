@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { User, Mail, Building2, MapPin, ArrowRight, ArrowLeft } from 'lucide-react'
+import { User, Mail, Building2, MapPin, ArrowRight, ArrowLeft, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import SessionManagementService from "@/src/sessionManagementService"
 import { Step2Props } from "../lib/types"
-import CompanyObligationSelector from "./CompanyObligationSelector"
+import { Checkbox } from "@/components/ui/checkbox"
 
 const sessionService = new SessionManagementService()
 
@@ -277,13 +277,90 @@ export function Step2Details({ loading, manufacturerDetails, residentType, setRe
                 </div>
             )}
 
-            {/* Company Obligation Selector - Only for Companies */}
-            {isCompany && setSelectedObligations && (
-                <CompanyObligationSelector
-                    pin={manufacturerDetails.pin}
-                    onObligationsSelected={setSelectedObligations}
-                    selectedObligations={selectedObligations || []}
-                />
+            {/* Obligation Details Section - Only for Companies */}
+            {isCompany && manufacturerDetails.obligationsData && (
+                <div className="p-4 rounded-lg border border-gray-200 bg-white/80">
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-medium text-black mb-2 flex items-center gap-1">
+                            <FileText className="w-4 h-4" />
+                            Obligation Details
+                        </h3>
+
+                        {/* Company Tax Info */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                            <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                <span className="text-xs text-gray-600">PIN Status</span>
+                                <p className="text-sm text-black font-medium">
+                                    {manufacturerDetails.obligationsData.pinStatus || 'N/A'}
+                                </p>
+                            </div>
+                            <div className="space-y-0.5 p-2 bg-gray-50 rounded-md">
+                                <span className="text-xs text-gray-600">iTax Status</span>
+                                <p className="text-sm text-black font-medium">
+                                    {manufacturerDetails.obligationsData.itaxStatus || 'N/A'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Obligations Table */}
+                        {manufacturerDetails.obligationsData.obligations && manufacturerDetails.obligationsData.obligations.length > 0 ? (
+                            <div className="space-y-2">
+                                <Label className="text-sm font-medium">
+                                    Tax Obligations (Select to file nil returns)
+                                </Label>
+                                <div className="border rounded-md overflow-hidden">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-100">
+                                            <tr>
+                                                <th className="text-left p-2 font-medium text-gray-700">Select</th>
+                                                <th className="text-left p-2 font-medium text-gray-700">Obligation Name</th>
+                                                <th className="text-left p-2 font-medium text-gray-700">Status</th>
+                                                <th className="text-left p-2 font-medium text-gray-700">Effective Period</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {manufacturerDetails.obligationsData.obligations.map((obligation, index) => (
+                                                <tr key={obligation.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                    <td className="p-2">
+                                                        <Checkbox
+                                                            id={`obligation-${obligation.id}`}
+                                                            checked={selectedObligations?.includes(obligation.id) || false}
+                                                            onCheckedChange={(checked) => {
+                                                                if (setSelectedObligations) {
+                                                                    if (checked) {
+                                                                        setSelectedObligations([...(selectedObligations || []), obligation.id]);
+                                                                    } else {
+                                                                        setSelectedObligations((selectedObligations || []).filter(id => id !== obligation.id));
+                                                                    }
+                                                                }
+                                                            }}
+                                                        />
+                                                    </td>
+                                                    <td className="p-2 font-medium text-black">{obligation.name}</td>
+                                                    <td className="p-2">
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                            {obligation.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-2 text-gray-600">
+                                                        {obligation.effectiveFrom} - {obligation.effectiveTo}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {selectedObligations && selectedObligations.length > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        {selectedObligations.length} obligation{selectedObligations.length > 1 ? 's' : ''} selected for nil return filing
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-gray-600">No active tax obligations found for this PIN</p>
+                        )}
+                    </div>
+                </div>
             )}
 
             {/* Single navigation section with personalized buttons */}

@@ -49,6 +49,7 @@ export default function FilePage() {
   })
   const [manufacturerDetails, setManufacturerDetails] = useState<ManufacturerDetails | null>(null)
   const [residentType, setResidentType] = useState("1") // Default to resident
+  const [selectedObligations, setSelectedObligations] = useState<string[]>([]) // For company obligations
   const [paymentStatus, setPaymentStatus] = useState<"Not Paid" | "Processing" | "Paid">("Not Paid")
   const [filingStatus, setFilingStatus] = useState<FilingStatus>({
     loggedIn: false,
@@ -574,6 +575,19 @@ export default function FilePage() {
 
         if (existingSession) {
           console.log('[APP] Existing session found:', existingSession);
+
+          // Extract manufacturer name from various possible locations
+          let manufacturerName = 'Unknown';
+          if (existingSession.form_data?.manufacturerName) {
+            manufacturerName = existingSession.form_data.manufacturerName;
+          } else if (existingSession.form_data?.manufacturerDetails?.taxpayerName) {
+            manufacturerName = existingSession.form_data.manufacturerDetails.taxpayerName;
+          } else if (existingSession.manufacturer_name) {
+            manufacturerName = existingSession.manufacturer_name;
+          }
+
+          console.log('[APP] Extracted manufacturer name:', manufacturerName);
+
           // Store current state and show dialog
           setExistingSessionData({
             ...existingSession,
@@ -587,7 +601,7 @@ export default function FilePage() {
               filingStatus
             },
             originalPin: newPin,
-            manufacturerName: existingSession.form_data?.manufacturerName || 'Unknown'
+            manufacturerName: manufacturerName
           });
           setShowDialog(true);
           setPinValidationStatus("idle");
@@ -660,6 +674,40 @@ export default function FilePage() {
               descriptive: details.descriptiveAddress || ''
             }
           };
+
+          // If it's a company PIN (starts with P), fetch obligations automatically
+          if (newPin.toUpperCase().startsWith('P')) {
+            console.log('[OBLIGATIONS] Company PIN detected, fetching obligations...');
+            try {
+              const obligationsResponse = await fetch('/api/company/check-obligations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: newPin })
+              });
+
+              const obligationsData = await obligationsResponse.json();
+
+              if (obligationsResponse.ok && obligationsData.success) {
+                console.log('[OBLIGATIONS] Fetched obligations:', obligationsData.obligations);
+                manufacturerDetailsObj.obligationsData = {
+                  taxpayerName: obligationsData.taxpayerName,
+                  pinStatus: obligationsData.pinStatus,
+                  itaxStatus: obligationsData.itaxStatus,
+                  obligations: obligationsData.obligations,
+                  timestamp: obligationsData.timestamp
+                };
+
+                // Don't auto-select - let user choose which obligations to file
+                setSelectedObligations([]);
+                console.log('[OBLIGATIONS] Obligations loaded, none selected by default');
+              } else {
+                console.error('[OBLIGATIONS] Failed to fetch obligations:', obligationsData.error);
+              }
+            } catch (obligationsError) {
+              console.error('[OBLIGATIONS] Error fetching obligations:', obligationsError);
+            }
+          }
+
           console.log('[APP] Setting manufacturer details:', manufacturerDetailsObj);
           setManufacturerDetails(manufacturerDetailsObj);
         }
@@ -720,90 +768,14 @@ export default function FilePage() {
           // Complete existing session
           await sessionService.completeSession(existingSessionData.id);
 
-          // Clear states
-          setManufacturerDetails(null);
-          setPasswordValidationStatus("idle");
-          setPasswordError(null);
-
-          const newPin = existingSessionData.originalPin;
-          if (newPin) {
-            // Create or update session with user_id
-            const currentSessionId = sessionService.getData('currentSessionId');
-            if (currentSessionId) {
-              const userDetails = await extractManufacturerDetails(newPin);
-
-              if (!userDetails || !userDetails.taxpayerName) {
-                setError('PIN NOT FOUND!');
-                setPinValidationStatus("invalid");
-                return;
-              }
-
-              // Create user and get user_id
-              const { data: userData, error: userError } = await supabase
-                .from('users')
-                .upsert({
-                  pin: newPin,
-                  name: userDetails.taxpayerName,
-                  email: userDetails.mainEmailId,
-                  phone: userDetails.mobileNumber
-                })
-                .select()
-                .single();
-
-              if (userError) throw userError;
-
-              // Update session with user_id and details
-              await sessionService.updateSession(currentSessionId, {
-                pin: newPin,
-                user_id: userData.id,
-                status: 'active',
-                form_data: {
-                  ...formData,
-                  pin: newPin,
-                  password: '',
-                  manufacturerDetails: userDetails
-                }
-              });
-
-              // Set manufacturer details in state
-              setManufacturerDetails({
-                pin: newPin,
-                name: userDetails.taxpayerName,
-                contactDetails: {
-                  mobile: userDetails.mobileNumber,
-                  email: userDetails.mainEmailId,
-                  secondaryEmail: userDetails.mainEmailId
-                },
-                businessDetails: {
-                  name: userDetails.taxpayerName,
-                  registrationNumber: userDetails.businessRegCertiNo || '',
-                  registrationDate: userDetails.busiRegDt || '',
-                  commencedDate: userDetails.busiCommencedDt || ''
-                },
-                postalAddress: {
-                  postalCode: userDetails.postalAddress?.postalCode || '',
-                  town: userDetails.postalAddress?.town || '',
-                  poBox: userDetails.postalAddress?.poBox || ''
-                },
-                physicalAddress: {
-                  descriptive: userDetails.descriptiveAddress || ''
-                }
-              });
-
-              setPinValidationStatus("valid");
-              setError(null);
-            }
-          }
         } catch (error) {
-          console.error('Error handling session transition:', error);
-          setError('Failed to transition session. Please try again.');
-          setPinValidationStatus("invalid");
+          console.error('[APP ERROR] Error completing session:', error);
         } finally {
           setLoading(false);
         }
+        setExistingSessionData(null);
       }
     }
-    setExistingSessionData(null);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -822,7 +794,6 @@ export default function FilePage() {
 
     console.log('[APP] Form submission processed');
   }
-
 
   // Handle password reset
   const handlePasswordReset = async () => {
@@ -1205,7 +1176,13 @@ export default function FilePage() {
             {(passwordValidationStatus === "valid" || formData.activeTab === 'pin') && (
               <Button
                 type="button"
-                disabled={formData.activeTab === 'id' ? (!formData.pin || !validatePIN(formData.pin).isValid || !formData.password || passwordValidationStatus !== "valid") : !formData.pin || pinValidationStatus !== "valid"}
+                disabled={
+                  formData.activeTab === 'id'
+                    ? (!formData.pin || !validatePIN(formData.pin).isValid || !formData.password || passwordValidationStatus !== "valid")
+                    : formData.pin.startsWith('A')
+                      ? (!formData.pin || pinValidationStatus !== "valid" || !formData.password || passwordValidationStatus !== "valid")
+                      : (!formData.pin || pinValidationStatus !== "valid")
+                }
                 onClick={() => setStep(2)}
                 className="bg-gradient-to-r from-purple-500 to-purple-700"
               >
@@ -1419,7 +1396,7 @@ export default function FilePage() {
                     passwordError={passwordError}
                     pinValidationStatus={pinValidationStatus}
                     passwordValidationStatus={passwordValidationStatus}
-                    onPINChange={handlePINChange}
+                    onPINChange={handlePINChangeWrapper}
                     onPasswordChange={handlePasswordChange}
                     onPasswordReset={handlePasswordReset}
                     onPasswordEmailReset={handlePasswordEmailReset}
@@ -1444,6 +1421,8 @@ export default function FilePage() {
                     manufacturerDetails={manufacturerDetails}
                     residentType={residentType}
                     setResidentType={setResidentType}
+                    selectedObligations={selectedObligations}
+                    setSelectedObligations={setSelectedObligations}
                     onBack={() => setStep(1)}
                     onNext={() => setStep(3)}
                   />
@@ -1641,15 +1620,17 @@ export default function FilePage() {
           <DialogContent className="w-[90%] max-w-[425px] rounded-lg p-4 md:p-6">
             <DialogHeader>
               <DialogTitle className="text-lg">Active Session Found</DialogTitle>
-              <DialogDescription className="text-black space-y-2 text-sm">
-                <p>
-                  There is an active session for <strong>{existingSessionData?.manufacturerName}</strong>
-                </p>
-                <p>PIN: {existingSessionData?.pin}</p>
-                <p>Progress: Step {existingSessionData?.current_step || 1} of 4</p>
-                <p className="font-semibold text-red-600">
-                  Proceeding will end the existing session and start a new one.
-                </p>
+              <DialogDescription asChild>
+                <div className="text-black space-y-2 text-sm">
+                  <div>
+                    There is an active session for <strong>{existingSessionData?.manufacturerName}</strong>
+                  </div>
+                  <div>PIN: {existingSessionData?.pin}</div>
+                  <div>Progress: Step {existingSessionData?.current_step || 1} of 4</div>
+                  <div className="font-semibold text-red-600">
+                    Proceeding will end the existing session and start a new one.
+                  </div>
+                </div>
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex flex-col space-y-2">

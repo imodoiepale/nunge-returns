@@ -62,7 +62,9 @@ async function loginToKRA(page, company) {
     const imagePath = path.join(downloadFolderPath, "ocr.png");
     await image.screenshot({ path: imagePath });
 
-    const worker = await createWorker('eng', 1);
+    const worker = await createWorker('eng', 1, {
+        workerPath: path.join(process.cwd(), 'node_modules', 'tesseract.js', 'src', 'worker-script', 'node', 'index.js')
+    });
     console.log("Extracting Text...");
     let result;
 
@@ -311,9 +313,9 @@ export async function POST(req) {
         // Launch browser (non-headless for UI interaction)
         const browser = await chromium.launch({
             headless: false,
-            // channel: "chrome",
-            args: ['--start-maximized'],
-            ignoreDefaultArgs: ['--headless']
+            channel: "chrome",
+            // args: ['--start-maximized'],
+            // ignoreDefaultArgs: ['--headless']
         });
         const context = await browser.newContext({
             viewport: { width: 1280, height: 800 },

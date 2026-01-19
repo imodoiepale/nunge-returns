@@ -36,6 +36,22 @@ export interface BusinessDetails {
   status?: 'Active' | 'Suspended' | 'Deregistered';
 }
 
+export interface Obligation {
+  id: string;
+  name: string;
+  status: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+}
+
+export interface ObligationsData {
+  taxpayerName: string;
+  pinStatus: string;
+  itaxStatus: string;
+  obligations: Obligation[];
+  timestamp: string;
+}
+
 export interface ManufacturerDetails {
   pin: string;
   name: string;
@@ -43,6 +59,7 @@ export interface ManufacturerDetails {
   postalAddress: PostalAddress;
   contactDetails: ContactDetails;
   businessDetails: BusinessDetails;
+  obligationsData?: ObligationsData;
   lastUpdated?: string;
   verificationStatus?: 'Verified' | 'Pending' | 'Failed';
 }

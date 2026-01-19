@@ -39,7 +39,7 @@ export const extractManufacturerDetails = async (pin: string) => {
       }
     }
 
-    const response = await fetch('/api/manufacturer', {
+    const response = await fetch('/api/kra/validate-pin', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,6 +73,10 @@ export const extractManufacturerDetails = async (pin: string) => {
       throw new Error(data.error)
     }
 
+    // Extract manufacturer details from the response
+    const manufacturerDetails = data.manufacturerDetails;
+    const taxpayerName = manufacturerDetails?.basic?.fullName || manufacturerDetails?.basic?.manufacturerName || 'Unknown';
+
     // Log the successful extraction
     if (currentSessionId) {
       try {
@@ -84,7 +88,7 @@ export const extractManufacturerDetails = async (pin: string) => {
             description: 'PIN details extracted successfully',
             metadata: {
               pin: pin,
-              taxpayer_name: data.data.taxpayerName
+              taxpayer_name: taxpayerName
             }
           }]);
 
@@ -99,12 +103,12 @@ export const extractManufacturerDetails = async (pin: string) => {
             pin_number: pin,
             pin_type: pin.startsWith('A') ? 'A' : 'P',
             is_individual: pin.startsWith('A'),
-            owner_name: data.data.taxpayerName,
-            owner_email: data.data.mainEmailId,
+            owner_name: taxpayerName,
+            owner_email: manufacturerDetails?.contact?.mainEmail || '',
             business_details: {
-              business_reg_certi_no: data.data.businessRegCertiNo,
-              busi_reg_dt: data.data.busiRegDt,
-              busi_commenced_dt: data.data.busiCommencedDt
+              business_reg_certi_no: manufacturerDetails?.basic?.registrationNumber || '',
+              busi_reg_dt: manufacturerDetails?.business?.registrationDate || '',
+              busi_commenced_dt: manufacturerDetails?.business?.commencementDate || ''
             },
             updated_at: new Date().toISOString()
           }, {
@@ -124,7 +128,21 @@ export const extractManufacturerDetails = async (pin: string) => {
       }
     }
 
-    return data.data
+    // Return the data in the expected format for handlePINChangeWrapper
+    return {
+      taxpayerName: taxpayerName,
+      mainEmailId: manufacturerDetails?.contact?.mainEmail || '',
+      mobileNumber: manufacturerDetails?.contact?.mobileNumber || '',
+      businessRegCertiNo: manufacturerDetails?.basic?.registrationNumber || '',
+      busiRegDt: manufacturerDetails?.business?.registrationDate || '',
+      busiCommencedDt: manufacturerDetails?.business?.commencementDate || '',
+      postalAddress: {
+        postalCode: manufacturerDetails?.address?.postalCode || '',
+        town: manufacturerDetails?.address?.town || '',
+        poBox: manufacturerDetails?.address?.poBox || ''
+      },
+      descriptiveAddress: manufacturerDetails?.address?.descriptive || ''
+    }
   } catch (error: any) {
     console.error('Error extracting manufacturer details:', error)
     throw error
@@ -185,7 +203,7 @@ export const validatePassword = async (
     if (!company_name) {
       try {
         // Call API to get taxpayer details by PIN
-        const pinResponse = await fetch(`/api/company/brs?pin=${encodeURIComponent(pin)}`, {
+        const pinResponse = await fetch(`/api/manufacturer/brs?pin=${encodeURIComponent(pin)}`, {
           method: 'GET'
         });
 
