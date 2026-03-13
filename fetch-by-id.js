@@ -1,29 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
 import https from 'https';
-
-/**
- * Retry wrapper for flaky KRA connections
- */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, label = 'operation'): Promise<T> {
-    let lastError: Error | null = null;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            return await fn();
-        } catch (err: any) {
-            lastError = err;
-            console.warn(`[KRA API] ${label} attempt ${attempt}/${maxRetries} failed: ${err.message}`);
-            if (attempt < maxRetries) {
-                await new Promise(r => setTimeout(r, 1000 * attempt));
-            }
-        }
-    }
-    throw lastError;
-}
 
 /**
  * Initialize KRA iTax session and get cookies
  */
-async function initKraSession(): Promise<Record<string, string>> {
+async function initKraSession() {
     return new Promise((resolve, reject) => {
         const options = {
             hostname: 'itax.kra.go.ke',
@@ -35,14 +15,14 @@ async function initKraSession(): Promise<Record<string, string>> {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5'
             },
-            timeout: 60000
+            timeout: 30000
         };
 
         console.log('[KRA API] Initializing session...');
 
         const req = https.request(options, (res) => {
             const cookies = res.headers['set-cookie'] || [];
-            const cookieMap: Record<string, string> = {};
+            const cookieMap = {};
 
             cookies.forEach((cookie) => {
                 const [nameValue] = cookie.split(';');
@@ -73,15 +53,7 @@ async function initKraSession(): Promise<Record<string, string>> {
 /**
  * Call KRA DWR endpoint
  */
-async function callKraDWR(params: {
-    cookies: Record<string, string>;
-    scriptSessionId: string;
-    windowName: string;
-    scriptName: string;
-    methodName: string;
-    params: string[];
-    batchId: number;
-}): Promise<string | null> {
+async function callKraDWR(params) {
     return new Promise((resolve, reject) => {
         const cookieString = Object.entries(params.cookies)
             .map(([k, v]) => `${k}=${v}`)
@@ -114,7 +86,7 @@ async function callKraDWR(params: {
                 'Accept': '*/*',
                 'Accept-Language': 'en-US,en;q=0.5'
             },
-            timeout: 60000
+            timeout: 30000
         };
 
         console.log(`[KRA API] Calling DWR: ${params.scriptName}.${params.methodName}`);
@@ -147,7 +119,7 @@ async function callKraDWR(params: {
 /**
  * Parse DWR response format
  */
-function parseDWRResponse(response: string): string | null {
+function parseDWRResponse(response) {
     // Parse DWR callback format: dwr.engine.remote.handleCallback("0","0","VALUE");
     const callbackMatch = response.match(/handleCallback\([^,]+,[^,]+,"([^"]+)"\)/);
     if (callbackMatch) return callbackMatch[1];
@@ -160,7 +132,7 @@ function parseDWRResponse(response: string): string | null {
 /**
  * Generate random script session ID
  */
-function generateScriptSessionId(): string {
+function generateScriptSessionId() {
     const random = Math.random().toString(16).slice(2).toUpperCase();
     const timestamp = Date.now();
     return `${random}/${timestamp}`;
@@ -169,17 +141,14 @@ function generateScriptSessionId(): string {
 /**
  * Generate random window name
  */
-function generateWindowName(): string {
+function generateWindowName() {
     return 'DWR-' + Math.random().toString(16).slice(2).toUpperCase();
 }
 
 /**
  * Fetch manufacturer details from KRA
  */
-async function fetchManufacturerDetails(
-    pin: string,
-    cookies: Record<string, string>
-): Promise<any> {
+async function fetchManufacturerDetails(pin, cookies) {
     return new Promise((resolve, reject) => {
         const cookieString = Object.entries(cookies)
             .map(([k, v]) => `${k}=${v}`)
@@ -201,7 +170,7 @@ async function fetchManufacturerDetails(
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            timeout: 60000
+            timeout: 30000
         };
 
         console.log('[KRA API] Fetching manufacturer details for PIN:', pin);
@@ -215,71 +184,15 @@ async function fetchManufacturerDetails(
                     console.log('[KRA API] Manufacturer details fetched successfully');
 
                     if (parsedData && parsedData.timsManBasicRDtlDTO) {
-                        // Extract name fields
-                        const firstName = parsedData.timsManBasicRDtlDTO?.firstName || '';
-                        const middleName = parsedData.timsManBasicRDtlDTO?.middleName || '';
-                        const lastName = parsedData.timsManBasicRDtlDTO?.lastName || '';
-                        const manufacturerName = parsedData.timsManBasicRDtlDTO?.manufacturerName || '';
-
-                        // Build full name
-                        let fullName = manufacturerName;
-                        if (firstName || lastName) {
-                            fullName = [firstName, middleName, lastName]
-                                .filter(name => name && name.trim())
-                                .join(' ');
-                        }
-
-                        const formatted = {
-                            basic: {
-                                fullName,
-                                firstName,
-                                middleName,
-                                lastName,
-                                manufacturerName,
-                                registrationNumber: parsedData.timsManBasicRDtlDTO?.manufacturerBrNo || '',
-                                idNumber: parsedData.timsManBasicRDtlDTO?.idNumber || '',
-                                idType: parsedData.timsManBasicRDtlDTO?.idType || '',
-                                pin
-                            },
-                            business: {
-                                businessName: parsedData.manBusinessRDtlDTO?.businessName || '',
-                                registrationDate: parsedData.manBusinessRDtlDTO?.businessRegDate || '',
-                                commencementDate: parsedData.manBusinessRDtlDTO?.businessComDate || '',
-                                businessType: parsedData.manBusinessRDtlDTO?.businessType || '',
-                                tradingName: parsedData.manBusinessRDtlDTO?.tradingName || ''
-                            },
-                            contact: {
-                                mainEmail: parsedData.manContactRDtlDTO?.mainEmail || '',
-                                secondaryEmail: parsedData.manContactRDtlDTO?.secondaryEmail || '',
-                                mobileNumber: parsedData.manContactRDtlDTO?.mobileNo || '',
-                                telephoneNumber: parsedData.manContactRDtlDTO?.telephoneNo || '',
-                                faxNumber: parsedData.manContactRDtlDTO?.faxNo || ''
-                            },
-                            address: {
-                                descriptive: parsedData.manAddRDtlDTO?.descriptiveAddress || '',
-                                buildingNumber: parsedData.manAddRDtlDTO?.buldgNo || '',
-                                streetRoad: parsedData.manAddRDtlDTO?.streetRoad || '',
-                                cityTown: parsedData.manAddRDtlDTO?.cityTown || '',
-                                county: parsedData.manAddRDtlDTO?.county || '',
-                                district: parsedData.manAddRDtlDTO?.district || '',
-                                town: parsedData.manAddRDtlDTO?.town || '',
-                                lrNumber: parsedData.manAddRDtlDTO?.lrNo || '',
-                                postalCode: parsedData.manAddRDtlDTO?.postalCode || '',
-                                poBox: parsedData.manAddRDtlDTO?.poBox || '',
-                                taxArea: parsedData.manAddRDtlDTO?.taxAreaLocality || '',
-                                jurisdictionStationId: parsedData.manAddRDtlDTO?.jurisdictionStationId || '',
-                                locationId: parsedData.manAddRDtlDTO?.locationId || ''
-                            }
-                        };
-
-                        resolve(formatted);
+                        // Return the raw manufacturer details in the expected format
+                        resolve([parsedData]);
                     } else {
                         console.warn('[KRA API] No manufacturer details in response');
-                        resolve({ error: 'No manufacturer details found', raw: parsedData });
+                        resolve(null);
                     }
-                } catch (parseError: any) {
+                } catch (parseError) {
                     console.error('[KRA API] Parse error:', parseError);
-                    resolve({ error: 'Failed to parse manufacturer details', details: parseError.message });
+                    resolve(null);
                 }
             });
         });
@@ -302,7 +215,7 @@ async function fetchManufacturerDetails(
 /**
  * Find PIN by ID number
  */
-async function findPinByIdNumber(idNumber: string) {
+async function findPinByIdNumber(idNumber) {
     try {
         console.log(`[KRA API] Starting PIN lookup for ID: ${idNumber}`);
 
@@ -352,13 +265,7 @@ async function findPinByIdNumber(idNumber: string) {
             console.log('[KRA API] PIN validation:', validation);
 
             // Step 6: Fetch manufacturer details
-            let manufacturerDetails = await fetchManufacturerDetails(fullPin, cookies);
-
-            // If details fetch returned an error or null, set to null for clean response
-            if (!manufacturerDetails || manufacturerDetails.error) {
-                console.log('[KRA API] Manufacturer details unavailable, returning null');
-                manufacturerDetails = null;
-            }
+            const manufacturerDetails = await fetchManufacturerDetails(fullPin, cookies);
 
             return {
                 success: true,
@@ -370,7 +277,7 @@ async function findPinByIdNumber(idNumber: string) {
         } else {
             throw new Error('Invalid response format from KRA');
         }
-    } catch (error: any) {
+    } catch (error) {
         console.error('[KRA API] Error in findPinByIdNumber:', error);
         throw error;
     }
@@ -379,54 +286,48 @@ async function findPinByIdNumber(idNumber: string) {
 /**
  * API Route Handler
  */
-export async function POST(request: NextRequest) {
+export default async function handler(req, res) {
     const startTime = Date.now();
 
-    try {
-        const body = await request.json();
-        const { idNumber } = body;
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
 
-        console.log('[API] POST /api/kra/fetch-by-id - Request received');
+    try {
+        const { idNumber } = req.body;
+
+        console.log('[API] POST /api/fetch-by-id - Request received');
         console.log('[API] ID Number:', idNumber);
 
         // Validate input
         if (!idNumber) {
             console.warn('[API] Missing ID number in request');
-            return NextResponse.json(
-                { error: 'ID number is required' },
-                { status: 400 }
-            );
+            return res.status(400).json({ error: 'ID number is required' });
         }
 
-        // Validate ID number format (should be 8 digits)
-        if (!/^\d{8}$/.test(idNumber)) {
+        // Validate ID number format (should be at least 5 digits)
+        if (!/^\d{5,}$/.test(idNumber)) {
             console.warn('[API] Invalid ID number format:', idNumber);
-            return NextResponse.json(
-                { error: 'ID number must be 8 digits' },
-                { status: 400 }
-            );
+            return res.status(400).json({ error: 'ID number must be at least 5 digits' });
         }
 
-        // Fetch data from KRA (with retry for flaky connections)
-        const result = await withRetry(() => findPinByIdNumber(idNumber), 3, 'fetch-by-id');
+        // Fetch data from KRA
+        const result = await findPinByIdNumber(idNumber);
 
         const duration = Date.now() - startTime;
         console.log(`[API] Request completed successfully in ${duration}ms`);
 
-        return NextResponse.json(result);
+        return res.status(200).json(result);
 
-    } catch (error: any) {
+    } catch (error) {
         const duration = Date.now() - startTime;
         console.error(`[API] Request failed after ${duration}ms:`, error);
         console.error('[API] Error stack:', error.stack);
 
-        return NextResponse.json(
-            {
-                error: 'Failed to fetch details from KRA',
-                message: error.message,
-                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            },
-            { status: 500 }
-        );
+        return res.status(500).json({
+            error: 'Failed to fetch details from KRA',
+            message: error.message,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 }

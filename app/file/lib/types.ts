@@ -222,6 +222,7 @@ export interface Step1Props {
   onPasswordChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPasswordReset?: () => void;
   onPasswordEmailReset?: () => void;
+  onRecoverPin?: () => void;
   onPasswordValidate?: () => Promise<void>;
   onNext: () => void;
   onActiveTabChange?: (tab: 'id' | 'pin') => void;

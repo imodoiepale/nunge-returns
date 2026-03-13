@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import https from 'https';
 
 /**
+ * Retry wrapper for flaky KRA connections
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, label = 'operation'): Promise<T> {
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            lastError = err;
+            console.warn(`[KRA API] ${label} attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+            if (attempt < maxRetries) {
+                await new Promise(r => setTimeout(r, 1000 * attempt));
+            }
+        }
+    }
+    throw lastError;
+}
+
+/**
  * Initialize KRA iTax session and get cookies
  */
 async function initKraSession(): Promise<Record<string, string>> {
@@ -12,11 +31,14 @@ async function initKraSession(): Promise<Record<string, string>> {
             path: '/KRA-Portal/',
             method: 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5'
             },
-            timeout: 30000
+            timeout: 60000
         };
+
+        console.log('[KRA API] Initializing session...');
 
         const req = https.request(options, (res) => {
             const cookies = res.headers['set-cookie'] || [];
@@ -30,13 +52,17 @@ async function initKraSession(): Promise<Record<string, string>> {
                 }
             });
 
+            console.log('[KRA API] Session initialized, cookies:', Object.keys(cookieMap));
             resolve(cookieMap);
         });
 
-        req.on('error', reject);
+        req.on('error', (error) => {
+            console.error('[KRA API] Session init error:', error);
+            reject(new Error(`Failed to initialize KRA session: ${error.message}`));
+        });
         req.on('timeout', () => {
             req.destroy();
-            reject(new Error('Session initialization timeout'));
+            reject(new Error('KRA session initialization timeout'));
         });
         req.end();
     });
@@ -109,9 +135,11 @@ async function callKraDWR(params: {
                 'Content-Length': Buffer.byteLength(body),
                 'Cookie': cookieString,
                 'Referer': 'https://itax.kra.go.ke/KRA-Portal/',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.5'
             },
-            timeout: 30000
+            timeout: 60000
         };
 
         console.log(`[KRA API] Calling DWR: ${params.scriptName}.${params.methodName}`);
@@ -126,7 +154,10 @@ async function callKraDWR(params: {
             });
         });
 
-        req.on('error', reject);
+        req.on('error', (error) => {
+            console.error('[KRA API] DWR call error:', error);
+            reject(new Error(`DWR call failed: ${error.message}`));
+        });
         req.on('timeout', () => {
             req.destroy();
             reject(new Error('DWR call timeout'));
@@ -165,7 +196,7 @@ async function fetchManufacturerDetails(
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            timeout: 30000
+            timeout: 60000
         };
 
         const req = https.request(options, (res) => {
@@ -286,8 +317,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Step 1: Initialize session
-        const cookies = await initKraSession();
+        // Step 1: Initialize session (with retry for flaky KRA)
+        const cookies = await withRetry(() => initKraSession(), 3, 'Session init');
         const scriptSessionId = generateScriptSessionId();
         const windowName = generateWindowName();
 

@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Check, CheckCircle, Clock, Download, AlertCircle } from 'lucide-react'
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 
 import { Step1PIN, Step2Details, Step3Payment, Step4Filing } from "./components/ReturnSteps"
+import ResetPasswordDialog from "./components/ResetPasswordDialog"
 import { FormData, ManufacturerDetails, FilingStatus } from './lib/types'
 import {
   validatePassword,
@@ -76,6 +77,12 @@ export default function FilePage() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentInfo, setPaymentInfo] = useState<any>(null)
+  const [showResetDialog, setShowResetDialog] = useState(false)
+  const [resetType, setResetType] = useState<'password' | 'email_password' | 'recover_pin'>('password')
+  const [resetStatus, setResetStatus] = useState<'idle' | 'paying' | 'running' | 'success' | 'error'>('idle')
+  const [resetError, setResetError] = useState<string | null>(null)
+  const [resetNewPassword, setResetNewPassword] = useState<string | null>(null)
+  const skipNextPinValidation = useRef(false)
 
   // Fetch user count
   useEffect(() => {
@@ -351,6 +358,14 @@ export default function FilePage() {
           setPinValidationStatus("valid");
           setManufacturerDetails(data.data);
 
+          // Update formData with manufacturer info so dialogs can access it
+          setFormData(prev => ({
+            ...prev,
+            manufacturerName: data.data.name || '',
+            email: data.data.contactDetails?.email || '',
+            mobileNumber: data.data.contactDetails?.mobile || ''
+          }));
+
           // Record successful validation in database
           if (currentSessionId) {
             try {
@@ -528,21 +543,28 @@ export default function FilePage() {
     const newPin = e.target.value.toUpperCase();
     console.log('[APP] PIN changed:', newPin);
 
+    // If skipNextPinValidation is set, ID search already populated manufacturerDetails — don't clear them
+    const isFromIdSearch = skipNextPinValidation.current;
+
     // Basic form update
     setFormData(prev => ({
       ...prev,
       pin: newPin,
       password: '', // Clear password when PIN changes
-      manufacturerName: '', // Clear manufacturer name
-      email: '', // Clear email
-      mobileNumber: '', // Clear mpesa number
-      mpesaNumber: '' // Clear mpesa number
+      ...(isFromIdSearch ? {} : {
+        manufacturerName: '', // Clear manufacturer name
+        email: '', // Clear email
+        mobileNumber: '', // Clear mpesa number
+        mpesaNumber: '' // Clear mpesa number
+      })
     }));
 
     // Reset all states
     setPasswordValidationStatus("idle");
     setPasswordError(null);
-    setManufacturerDetails(null);
+    if (!isFromIdSearch) {
+      setManufacturerDetails(null);
+    }
     setError(null);
     setStep(1);
     setPaymentStatus("Not Paid");
@@ -608,7 +630,17 @@ export default function FilePage() {
           return;
         }
 
-        // 2. If no existing session, validate PIN against KRA
+        // 2. If PIN came from ID search, skip redundant KRA validation
+        if (skipNextPinValidation.current) {
+          console.log('[APP] PIN from ID search — skipping redundant KRA validation');
+          skipNextPinValidation.current = false;
+          setPinValidationStatus("valid");
+          setError(null);
+          setLoading(false);
+          return;
+        }
+
+        // 3. If no existing session, validate PIN against KRA
         console.log('[APP] No existing session, fetching manufacturer details for PIN:', newPin);
         const details = await extractManufacturerDetails(newPin);
         console.log('[APP] Manufacturer details:', details);
@@ -795,201 +827,44 @@ export default function FilePage() {
     console.log('[APP] Form submission processed');
   }
 
-  // Handle password reset
-  const handlePasswordReset = async () => {
-    try {
-      // Record password reset attempt in database
-      const currentSessionId = sessionService.getData('currentSessionId');
-      if (currentSessionId) {
-        try {
-          await supabase
-            .from('session_activities')
-            .insert([{
-              session_id: currentSessionId,
-              activity_type: 'user_action',
-              description: 'Password reset requested',
-              metadata: {
-                pin: formData.pin
-              }
-            }]);
-
-          console.log('[DB] Recorded password reset request');
-        } catch (dbError) {
-          console.error('[DB ERROR] Failed to record password reset request:', dbError);
-        }
-      }
-
-      const success = await resetPassword(formData.pin);
-
-      if (success) {
-        alert("Password reset instructions have been sent to your registered mobile number.");
-
-        // Record successful reset request in database
-        if (currentSessionId) {
-          try {
-            await supabase
-              .from('session_activities')
-              .insert([{
-                session_id: currentSessionId,
-                activity_type: 'user_action',
-                description: 'Password reset initiated successfully',
-                metadata: {
-                  pin: formData.pin
-                }
-              }]);
-
-            console.log('[DB] Recorded successful password reset initiation');
-          } catch (dbError) {
-            console.error('[DB ERROR] Failed to record successful password reset initiation:', dbError);
-          }
-        }
-      } else {
-        alert("Failed to initiate password reset. Please try again.");
-
-        // Record failed reset request in database
-        if (currentSessionId) {
-          try {
-            await supabase
-              .from('session_activities')
-              .insert([{
-                session_id: currentSessionId,
-                activity_type: 'user_action',
-                description: 'Password reset initiation failed',
-                metadata: {
-                  pin: formData.pin
-                }
-              }]);
-
-            console.log('[DB] Recorded failed password reset initiation');
-          } catch (dbError) {
-            console.error('[DB ERROR] Failed to record failed password reset initiation:', dbError);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error during password reset:', error);
-      alert("An error occurred during password reset. Please try again.");
-
-      // Record error in database
-      const currentSessionId = sessionService.getData('currentSessionId');
-      if (currentSessionId) {
-        try {
-          await supabase
-            .from('session_activities')
-            .insert([{
-              session_id: currentSessionId,
-              activity_type: 'user_action',
-              description: 'Password reset error',
-              metadata: {
-                pin: formData.pin,
-                error: error.message
-              }
-            }]);
-
-          console.log('[DB] Recorded password reset error');
-        } catch (dbError) {
-          console.error('[DB ERROR] Failed to record password reset error:', dbError);
-        }
-      }
-    }
+  // Handle password reset — opens dialog
+  const handlePasswordReset = () => {
+    setResetType('password');
+    setShowResetDialog(true);
   }
 
-  // Handle password and email reset
-  const handlePasswordEmailReset = async () => {
-    try {
-      // Record password+email reset attempt in database
-      const currentSessionId = sessionService.getData('currentSessionId');
-      if (currentSessionId) {
-        try {
-          await supabase
-            .from('session_activities')
-            .insert([{
-              session_id: currentSessionId,
-              activity_type: 'user_action',
-              description: 'Password and email reset requested',
-              metadata: {
-                pin: formData.pin
-              }
-            }]);
+  // Handle password and email reset — opens dialog
+  const handlePasswordEmailReset = () => {
+    setResetType('email_password');
+    setShowResetDialog(true);
+  }
 
-          console.log('[DB] Recorded password and email reset request');
-        } catch (dbError) {
-          console.error('[DB ERROR] Failed to record password and email reset request:', dbError);
-        }
-      }
+  // Handle recover PIN using ID — opens dialog
+  const handleRecoverPin = () => {
+    setResetType('recover_pin');
+    setShowResetDialog(true);
+  }
 
-      const success = await resetPasswordAndEmail(formData.pin);
+  // Called when password reset completes — set the new password and mark as validated
+  const handleResetComplete = (newPassword: string) => {
+    console.log('[APP] Password reset completed, setting new password');
+    setFormData(prev => ({ ...prev, password: newPassword }));
+    setPasswordValidationStatus("valid");
+    setPasswordError(null);
 
-      if (success) {
-        alert("Password and email reset instructions have been sent to your registered mobile number.");
-
-        // Record successful reset request in database
-        if (currentSessionId) {
-          try {
-            await supabase
-              .from('session_activities')
-              .insert([{
-                session_id: currentSessionId,
-                activity_type: 'user_action',
-                description: 'Password and email reset initiated successfully',
-                metadata: {
-                  pin: formData.pin
-                }
-              }]);
-
-            console.log('[DB] Recorded successful password and email reset initiation');
-          } catch (dbError) {
-            console.error('[DB ERROR] Failed to record successful password and email reset initiation:', dbError);
-          }
-        }
-      } else {
-        alert("Failed to initiate reset. Please try again.");
-
-        // Record failed reset request in database
-        if (currentSessionId) {
-          try {
-            await supabase
-              .from('session_activities')
-              .insert([{
-                session_id: currentSessionId,
-                activity_type: 'user_action',
-                description: 'Password and email reset initiation failed',
-                metadata: {
-                  pin: formData.pin
-                }
-              }]);
-
-            console.log('[DB] Recorded failed password and email reset initiation');
-          } catch (dbError) {
-            console.error('[DB ERROR] Failed to record failed password and email reset initiation:', dbError);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error during password and email reset:', error);
-      alert("An error occurred during reset. Please try again.");
-
-      // Record error in database
-      const currentSessionId = sessionService.getData('currentSessionId');
-      if (currentSessionId) {
-        try {
-          await supabase
-            .from('session_activities')
-            .insert([{
-              session_id: currentSessionId,
-              activity_type: 'user_action',
-              description: 'Password and email reset error',
-              metadata: {
-                pin: formData.pin,
-                error: error.message
-              }
-            }]);
-
-          console.log('[DB] Recorded password and email reset error');
-        } catch (dbError) {
-          console.error('[DB ERROR] Failed to record password and email reset error:', dbError);
-        }
-      }
+    // Record in database
+    const currentSessionId = sessionService.getData('currentSessionId');
+    if (currentSessionId) {
+      supabase
+        .from('session_activities')
+        .insert([{
+          session_id: currentSessionId,
+          activity_type: 'user_action',
+          description: 'Password reset completed via automation',
+          metadata: { pin: formData.pin }
+        }])
+        .then(() => console.log('[DB] Recorded password reset completion'))
+        .catch(error => console.error('[DB ERROR]', error));
     }
   }
 
@@ -1400,6 +1275,7 @@ export default function FilePage() {
                     onPasswordChange={handlePasswordChange}
                     onPasswordReset={handlePasswordReset}
                     onPasswordEmailReset={handlePasswordEmailReset}
+                    onRecoverPin={handleRecoverPin}
                     onPasswordValidate={async () => {
                       await validatePassword(
                         formData.pin,
@@ -1411,7 +1287,16 @@ export default function FilePage() {
                     }}
                     onNext={() => setStep(2)}
                     onActiveTabChange={handleActiveTabChange}
-                    onManufacturerDetailsFound={setManufacturerDetails}
+                    onManufacturerDetailsFound={(details) => {
+                      skipNextPinValidation.current = true;
+                      setManufacturerDetails(details);
+                      setFormData(prev => ({
+                        ...prev,
+                        manufacturerName: details.name || '',
+                        email: details.contactDetails?.email || '',
+                        mobileNumber: details.contactDetails?.mobile || ''
+                      }));
+                    }}
                   />
                 )}
 
@@ -1651,6 +1536,17 @@ export default function FilePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {/* Password Reset Dialog */}
+        <ResetPasswordDialog
+          open={showResetDialog}
+          onOpenChange={setShowResetDialog}
+          pin={formData.pin}
+          email={manufacturerDetails?.contactDetails?.email || formData.email}
+          taxpayerName={manufacturerDetails?.name || formData.manufacturerName}
+          mobileNumber={manufacturerDetails?.contactDetails?.mobile || formData.mobileNumber}
+          resetType={resetType}
+          onResetComplete={handleResetComplete}
+        />
       </div>
     </PageBackground >
   )

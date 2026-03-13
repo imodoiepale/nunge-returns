@@ -1,9 +1,10 @@
-FROM node:18-slim
+FROM node:20-slim
 
-# Install dependencies for Playwright
+# Install dependencies for Playwright and system utilities
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
+    curl \
     libgconf-2-4 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -24,11 +25,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better layer caching
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci --omit=dev || npm install
 
 # Copy project files
 COPY . .
@@ -38,6 +39,13 @@ RUN npx playwright install chromium --with-deps
 
 # Build the application
 RUN npm run build
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
 
 # Start the application
 CMD ["npm", "start"]

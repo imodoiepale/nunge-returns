@@ -75,6 +75,22 @@ export const extractManufacturerDetails = async (pin: string) => {
 
     // Extract manufacturer details from the response
     const manufacturerDetails = data.manufacturerDetails;
+
+    // Handle case where PIN is valid but manufacturer details couldn't be fetched
+    if (!manufacturerDetails || manufacturerDetails.error) {
+      console.log('[PIN] PIN valid but no manufacturer details available, returning basic info');
+      return {
+        taxpayerName: data.validation || 'KRA Taxpayer',
+        mainEmailId: '',
+        mobileNumber: '',
+        businessRegCertiNo: '',
+        busiRegDt: '',
+        busiCommencedDt: '',
+        postalAddress: { postalCode: '', town: '', poBox: '' },
+        descriptiveAddress: ''
+      }
+    }
+
     const taxpayerName = manufacturerDetails?.basic?.fullName || manufacturerDetails?.basic?.manufacturerName || 'Unknown';
 
     // Log the successful extraction

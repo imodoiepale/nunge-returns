@@ -4,8 +4,10 @@ import React, { useState, useEffect } from 'react'
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, FileText, Trash2 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 
 interface Obligation {
     id: string
@@ -15,16 +17,35 @@ interface Obligation {
     effectiveTo: string
 }
 
+export type ActionMode = 'file' | 'terminate'
+
+const TERMINATION_REASONS = [
+    'Business Closed',
+    'Business Dormant',
+    'Merged with Another Entity',
+    'Obligation Not Applicable',
+    'Duplicate Registration',
+    'Other',
+]
+
 interface CompanyObligationSelectorProps {
     pin: string
     onObligationsSelected: (selectedIds: string[]) => void
     selectedObligations: string[]
+    actionMode?: ActionMode
+    onActionModeChange?: (mode: ActionMode) => void
+    terminationReason?: string
+    onTerminationReasonChange?: (reason: string) => void
 }
 
 export default function CompanyObligationSelector({
     pin,
     onObligationsSelected,
-    selectedObligations
+    selectedObligations,
+    actionMode = 'file',
+    onActionModeChange,
+    terminationReason = '',
+    onTerminationReasonChange,
 }: CompanyObligationSelectorProps) {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -165,9 +186,54 @@ export default function CompanyObligationSelector({
                     {/* Obligations List */}
                     {obligations.length > 0 ? (
                         <div className="space-y-3">
+                            {/* Action Mode Toggle */}
+                            {onActionModeChange && (
+                                <div className="flex gap-2 mb-3">
+                                    <Button
+                                        variant={actionMode === 'file' ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => onActionModeChange('file')}
+                                        className="flex-1"
+                                    >
+                                        <FileText className="h-3 w-3 mr-1" />
+                                        File Nil Returns
+                                    </Button>
+                                    <Button
+                                        variant={actionMode === 'terminate' ? 'destructive' : 'outline'}
+                                        size="sm"
+                                        onClick={() => onActionModeChange('terminate')}
+                                        className="flex-1"
+                                    >
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Terminate Obligations
+                                    </Button>
+                                </div>
+                            )}
+
+                            {/* Termination Reason (only in terminate mode) */}
+                            {actionMode === 'terminate' && onTerminationReasonChange && (
+                                <div className="mb-3 p-3 rounded-md border border-red-200 bg-red-50">
+                                    <Label className="text-sm font-medium text-red-700 mb-2 block">
+                                        Termination Reason
+                                    </Label>
+                                    <Select value={terminationReason} onValueChange={onTerminationReasonChange}>
+                                        <SelectTrigger className="bg-white">
+                                            <SelectValue placeholder="Select a reason..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {TERMINATION_REASONS.map(reason => (
+                                                <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-between">
                                 <Label className="text-sm font-medium">
-                                    Select obligations to file nil returns for:
+                                    {actionMode === 'terminate'
+                                        ? 'Select obligations to terminate:'
+                                        : 'Select obligations to file nil returns for:'}
                                 </Label>
                                 <div className="flex gap-2">
                                     <Button
@@ -216,10 +282,16 @@ export default function CompanyObligationSelector({
                             </div>
 
                             {selectedObligations.length > 0 && (
-                                <Alert>
-                                    <CheckCircle2 className="h-4 w-4" />
+                                <Alert variant={actionMode === 'terminate' ? 'destructive' : 'default'}>
+                                    {actionMode === 'terminate' ? <Trash2 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                                     <AlertDescription>
-                                        {selectedObligations.length} obligation{selectedObligations.length > 1 ? 's' : ''} selected for nil return filing
+                                        {selectedObligations.length} obligation{selectedObligations.length > 1 ? 's' : ''} selected
+                                        {actionMode === 'terminate'
+                                            ? ' for termination'
+                                            : ` for nil return filing — Total: KES ${selectedObligations.length * 50}`}
+                                        {actionMode === 'terminate' && !terminationReason && (
+                                            <span className="block text-xs mt-1 text-red-600">Please select a termination reason above</span>
+                                        )}
                                     </AlertDescription>
                                 </Alert>
                             )}

@@ -30,6 +30,7 @@ export default function Step1PIN({
     onPasswordChange,
     onPasswordReset,
     onPasswordEmailReset,
+    onRecoverPin,
     onPasswordValidate,
     onNext,
     onActiveTabChange,
@@ -91,29 +92,30 @@ export default function Step1PIN({
             const data = await response.json();
             console.log('[ID SEARCH] API response:', data);
 
-            if (data.success && data.manufacturerDetails) {
-                const fullName = data.manufacturerDetails.basic?.fullName ||
-                    data.manufacturerDetails.basic?.manufacturerName ||
-                    'Unknown';
+            if (data.success && data.pin) {
+                const md = data.manufacturerDetails;
+                const fullName = md?.basic?.fullName ||
+                    md?.basic?.manufacturerName ||
+                    data.validation || 'KRA Taxpayer';
 
                 // Format data for Step1PIN component
                 const enrichedData = {
                     pin: data.pin,
                     taxpayerName: fullName,
-                    mainEmailId: data.manufacturerDetails.contact?.mainEmail || '',
-                    mobileNumber: data.manufacturerDetails.contact?.mobileNumber || '',
-                    secondaryEmail: data.manufacturerDetails.contact?.secondaryEmail || '',
-                    descriptiveAddress: data.manufacturerDetails.address?.descriptive || '',
+                    mainEmailId: md?.contact?.mainEmail || '',
+                    mobileNumber: md?.contact?.mobileNumber || '',
+                    secondaryEmail: md?.contact?.secondaryEmail || '',
+                    descriptiveAddress: md?.address?.descriptive || '',
                     postalAddress: {
-                        postalCode: data.manufacturerDetails.address?.postalCode || '',
-                        town: data.manufacturerDetails.address?.town || '',
-                        poBox: data.manufacturerDetails.address?.poBox || ''
+                        postalCode: md?.address?.postalCode || '',
+                        town: md?.address?.town || '',
+                        poBox: md?.address?.poBox || ''
                     },
                     businessInfo: {
-                        name: data.manufacturerDetails.business?.businessName || fullName,
-                        registrationNumber: data.manufacturerDetails.basic?.registrationNumber || '',
-                        registrationDate: data.manufacturerDetails.business?.registrationDate || '',
-                        commencementDate: data.manufacturerDetails.business?.commencementDate || ''
+                        name: md?.business?.businessName || fullName,
+                        registrationNumber: md?.basic?.registrationNumber || '',
+                        registrationDate: md?.business?.registrationDate || '',
+                        commencementDate: md?.business?.commencementDate || ''
                     }
                 };
 
@@ -143,7 +145,33 @@ export default function Step1PIN({
                     }
                 }
 
-                // Update the PIN in the parent component
+                // Set manufacturer details in parent BEFORE PIN change to skip redundant validation
+                const manufacturerDetailsForParent = {
+                    pin: data.pin,
+                    name: fullName,
+                    contactDetails: {
+                        mobile: md?.contact?.mobileNumber || '',
+                        email: md?.contact?.mainEmail || '',
+                        secondaryEmail: md?.contact?.secondaryEmail || ''
+                    },
+                    businessDetails: {
+                        name: md?.business?.businessName || fullName,
+                        registrationNumber: md?.basic?.registrationNumber || '',
+                        registrationDate: md?.business?.registrationDate || '',
+                        commencedDate: md?.business?.commencementDate || ''
+                    },
+                    postalAddress: {
+                        postalCode: md?.address?.postalCode || '',
+                        town: md?.address?.town || '',
+                        poBox: md?.address?.poBox || ''
+                    },
+                    physicalAddress: {
+                        descriptive: md?.address?.descriptive || ''
+                    }
+                };
+                onManufacturerDetailsFound(manufacturerDetailsForParent);
+
+                // Update the PIN in the parent component (skip flag already set above)
                 onPINChange({ target: { value: data.pin } } as React.ChangeEvent<HTMLInputElement>);
 
                 // Switch to PIN tab after successful ID search
@@ -743,25 +771,28 @@ export default function Step1PIN({
                             </label>
                         </div>
 
-                        {pinValidationStatus === "invalid" && (
+                        {(pinValidationStatus === "valid" || pinValidationStatus === "invalid" || passwordValidationStatus === "invalid") && (
                             <div className="grid grid-cols-3 gap-2 mt-4">
                                 <Button
                                     type="button"
-                                    className="bg-primary hover:bg-primary/90"
-                                    onClick={onPasswordReset}
+                                    variant="outline"
+                                    className="text-xs px-2 border-primary text-primary hover:bg-primary/10"
+                                    onClick={onRecoverPin}
                                 >
                                     Recover PIN using ID
                                 </Button>
                                 <Button
                                     type="button"
-                                    className="bg-primary hover:bg-primary/90"
+                                    variant="outline"
+                                    className="text-xs px-2 border-primary text-primary hover:bg-primary/10"
                                     onClick={onPasswordReset}
                                 >
                                     Reset Password
                                 </Button>
                                 <Button
                                     type="button"
-                                    className="bg-primary hover:bg-primary/90"
+                                    variant="outline"
+                                    className="text-xs px-2 border-primary text-primary hover:bg-primary/10"
                                     onClick={onPasswordEmailReset}
                                 >
                                     Reset Email + Password
