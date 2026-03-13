@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes'
 import { TooltipProviderWrapper } from '@/components/providers/tooltip-provider'
 import { AdminLayoutWrapper } from "@/components/admin-layout-wrapper"
 import { getDomainTheme } from '@/lib/utils'
+import KRAAnnouncementBanner from '@/components/KRAAnnouncementBanner'
 
 import "./globals.css"
 
@@ -30,6 +31,7 @@ export default async function RootLayout({
         >
           <TooltipProviderWrapper>
             <div className="relative flex min-h-screen flex-col">
+              <KRAAnnouncementBanner />
               <AdminLayoutWrapper>
                 <main className="flex-1">{children}</main>
               </AdminLayoutWrapper>

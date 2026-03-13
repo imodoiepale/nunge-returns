@@ -312,9 +312,35 @@ async function navigateToFileReturn(page, individual) {
     const pendingYears = currentYear - periodYear;
     const extraCharge = pendingYears > 0 ? pendingYears * 10 : 0;
 
-    // If there are pending years and user hasn't paid extra yet, return immediately
+    // If there are pending years and user hasn't paid extra yet, click submit to see actual KRA message
     if (pendingYears > 0 && !individual.hasPaidExtra) {
-        console.log(`[PAYMENT] Pending years detected: ${pendingYears}. Waiting for payment.`);
+        console.log(`[PAYMENT] Pending years detected: ${pendingYears}. Checking KRA message...`);
+        
+        // Click submit to trigger any dialogs from KRA
+        await page.getByRole('button', { name: 'Submit' }).click();
+        await page.waitForTimeout(2000);
+        
+        // Capture any dialog or page messages
+        const pageContent = await page.content();
+        const hasEmploymentIncome = (dialogMessage && dialogMessage.toLowerCase().includes('employment')) || 
+                                    (/employment\s+income/i.test(pageContent) && /cannot\s+file\s+nil\s+return/i.test(pageContent));
+        
+        if (hasEmploymentIncome) {
+            console.log('[ERROR] Employment income detected - cannot file nil return');
+            return {
+                requiresPayment: true,
+                reason: 'employment_income',
+                periodFrom,
+                periodTo,
+                pendingYears,
+                extraCharge,
+                refundAmount: 30,
+                kraDialogMessage: dialogMessage || 'Employment income detected',
+                message: dialogMessage || `You have Employment Income. You cannot file a NIL return.`
+            };
+        }
+        
+        // Return pending years payment requirement with actual KRA message
         return {
             requiresPayment: true,
             reason: 'pending_years',
@@ -322,6 +348,7 @@ async function navigateToFileReturn(page, individual) {
             periodTo,
             pendingYears,
             extraCharge,
+            kraDialogMessage: dialogMessage || 'No dialog shown',
             message: `You have ${pendingYears} pending year(s) to file. Please pay the extra charge of KES ${extraCharge} to proceed.`
         };
     }
@@ -335,6 +362,51 @@ async function navigateToFileReturn(page, individual) {
     const textError = /employment\s+income/i.test(pageContent) && /cannot\s+file\s+nil\s+return/i.test(pageContent);
     const dialogError = dialogMessage && (dialogMessage.includes('Employment Income') || dialogMessage.includes('employment income'));
 
+    // Extract message from warning/announcement banner at top of page (colored strip)
+    let bannerMessage = '';
+    try {
+        // Look for common warning/announcement banner selectors
+        const bannerSelectors = [
+            '.alert', '.warning', '.announcement', '.notice', '.message',
+            '[class*="alert"]', '[class*="warning"]', '[class*="banner"]',
+            '[style*="background"]', '.error-message', '.info-message'
+        ];
+        
+        for (const selector of bannerSelectors) {
+            const banner = await page.locator(selector).first();
+            if (await banner.count() > 0) {
+                const text = await banner.textContent().catch(() => '');
+                if (text && text.trim().length > 10) {
+                    bannerMessage = text.trim();
+                    console.log(`[BANNER] Found message: ${bannerMessage}`);
+                    break;
+                }
+            }
+        }
+    } catch (e) {
+        console.log('[BANNER] Could not extract banner message:', e.message);
+    }
+
+    // Check for filing deadline restriction (2025 returns can only be filed after March 31, 2026)
+    const filingDeadlineError = dialogMessage && /can file.*after.*31.*march/i.test(dialogMessage);
+    const filingDeadlineText = /can file.*after.*31.*march/i.test(pageContent);
+    const filingDeadlineBanner = bannerMessage && /can file.*after.*31.*march/i.test(bannerMessage);
+
+    if (filingDeadlineError || filingDeadlineText || filingDeadlineBanner) {
+        console.log('[ERROR] Filing deadline restriction - 2025 returns can only be filed after March 31, 2026');
+        const actualMessage = bannerMessage || dialogMessage || 'You can file the 2025 nil return for this obligation after 31st March 2026. KRA is still reconciling data from eTIMS and withholding tax records.';
+        return {
+            requiresPayment: false,
+            reason: 'filing_deadline',
+            periodFrom,
+            periodTo,
+            pendingYears: 0,
+            extraCharge: 0,
+            kraDialogMessage: actualMessage,
+            message: actualMessage
+        };
+    }
+
     if (textError || dialogError) {
         console.log('[ERROR] Employment income detected after first submit');
         return {
@@ -345,6 +417,7 @@ async function navigateToFileReturn(page, individual) {
             pendingYears,
             extraCharge,
             refundAmount: 30,
+            kraDialogMessage: dialogMessage || 'Employment income detected',
             message: dialogError ? dialogMessage : `You have Employment Income. You cannot file a NIL return.`
         };
     }
@@ -355,6 +428,21 @@ async function navigateToFileReturn(page, individual) {
     await page.waitForTimeout(2000);
 
     // Check errors again after second submit
+    const filingDeadlineError2 = dialogMessage && /can file.*after.*31.*march/i.test(dialogMessage);
+    if (filingDeadlineError2) {
+        console.log('[ERROR] Filing deadline restriction after second submit');
+        return {
+            requiresPayment: false,
+            reason: 'filing_deadline',
+            periodFrom,
+            periodTo,
+            pendingYears: 0,
+            extraCharge: 0,
+            kraDialogMessage: dialogMessage,
+            message: dialogMessage || 'You can file the 2025 nil return for this obligation after 31st March 2026.'
+        };
+    }
+
     if (dialogMessage && (dialogMessage.includes('Employment Income') || dialogMessage.includes('employment income'))) {
         return {
             requiresPayment: true,
@@ -364,6 +452,7 @@ async function navigateToFileReturn(page, individual) {
             pendingYears,
             extraCharge,
             refundAmount: 30,
+            kraDialogMessage: dialogMessage,
             message: dialogMessage
         };
     }
@@ -589,6 +678,8 @@ export async function POST(req) {
             // Check if employment income was detected (requires payment)
             if (receiptPaths.requiresPayment) {
                 console.log(`[PAYMENT REQUIRED] Reason: ${receiptPaths.reason}`);
+                console.log('[BROWSER] Waiting 5 seconds before closing...');
+                await page.waitForTimeout(5000);
                 await browser.close();
                 return NextResponse.json({
                     requiresPayment: true,
@@ -726,6 +817,10 @@ export async function POST(req) {
                 { status: 500 }
             );
         } finally {
+            // Wait 5 seconds before closing to allow page to fully load
+            console.log('[BROWSER] Waiting 5 seconds before closing...');
+            await page.waitForTimeout(5000);
+            
             // Close browser
             await page.close();
             await context.close();
