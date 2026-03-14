@@ -10,7 +10,7 @@ export default function ServicesPage() {
             description: "Get your KRA PIN quickly and easily with our streamlined process.",
             icon: "file-plus",
             slug: "register-kra-pin",
-            price: "KES 50",
+            price: "KES 30",
             benefits: ["Fast processing", "No paperwork", "Step-by-step guidance"]
         },
         {
@@ -18,7 +18,7 @@ export default function ServicesPage() {
             description: "Reset your KRA password securely without the usual hassle.",
             icon: "key",
             slug: "renew-kra-password",
-            price: "KES 50",
+            price: "KES 20",
             benefits: ["Instant reset", "Bank-level security", "24/7 availability"]
         },
         {
@@ -26,7 +26,7 @@ export default function ServicesPage() {
             description: "Quick and easy nil returns filing for individuals and companies.",
             icon: "file-text",
             slug: "file-nil-returns",
-            price: "KES 50",
+            price: "KES 30",
             benefits: ["30-second filing", "Automatic compliance", "Digital receipts"]
         },
         {
@@ -34,7 +34,7 @@ export default function ServicesPage() {
             description: "Update your registered email address with KRA in minutes.",
             icon: "mail",
             slug: "change-kra-email",
-            price: "KES 50",
+            price: "KES 30",
             benefits: ["Simple verification", "Automated confirmation", "Secure process"]
         },
         {
@@ -42,7 +42,7 @@ export default function ServicesPage() {
             description: "Complete your NSSF registration quickly and without complications.",
             icon: "shield",
             slug: "register-nssf",
-            price: "KES 50",
+            price: "KES 30",
             benefits: ["Compliance assured", "Digital certificates", "Future-proof setup"]
         },
         {
@@ -50,7 +50,7 @@ export default function ServicesPage() {
             description: "Get registered with the Social Health Insurance Fund easily.",
             icon: "heart-pulse",
             slug: "register-shif",
-            price: "KES 50",
+            price: "KES 30",
             benefits: ["Immediate activation", "Paperless process", "Full compliance"]
         }
     ];

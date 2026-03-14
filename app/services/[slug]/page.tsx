@@ -17,29 +17,31 @@ const serviceData = {
         requirements: [
             "National ID or Passport",
             "Valid email address",
-            "Phone number",
+            "Mobile phone number",
+            "Residential address details"
         ],
         steps: [
-            "Fill in your personal details",
-            "Upload required documents",
-            // "Verify your email and phone number",
-            "Receive your KRA PIN instantly"
+            "Upload your National ID or Passport",
+            "AI extracts your information automatically",
+            "Review and complete your personal details",
+            "Provide contact and address information",
+            "Submit and receive your KRA PIN"
         ],
         faq: [
             {
                 question: "How long does it take to get my KRA PIN?",
-                answer: "With Nunge Returns, you can receive your KRA PIN within minutes of completing the application process, compared to days or weeks through traditional channels."
+                answer: "With our automated system, you can complete the registration process in minutes. Your PIN will be generated immediately upon successful submission."
             },
             {
-                question: "Is the KRA PIN registration process secure?",
-                answer: "Yes, we implement bank-level encryption and security measures to protect your personal information throughout the registration process."
+                question: "What documents do I need?",
+                answer: "You need a valid National ID or Passport, a mobile phone number, and an email address. Our AI will extract information from your ID automatically."
             },
             {
-                question: "Do I need to visit a KRA office?",
-                answer: "No, our platform allows you to complete the entire registration process online without visiting any physical office."
+                question: "Is my information secure?",
+                answer: "Yes, we use bank-grade encryption to protect your data. Your information is transmitted securely to KRA's official portal."
             }
         ],
-        price: "Ksh 50",
+        price: "Ksh 30",
         callToAction: "Register KRA PIN Now"
     },
     "renew-kra-password": {
@@ -73,7 +75,7 @@ const serviceData = {
                 answer: "No, for security reasons, you create your own new password directly on our platform. We never send passwords via email."
             }
         ],
-        price: "Ksh 50",
+        price: "Ksh 30",
         callToAction: "Reset KRA Password Now"
     },
     "change-kra-email": {
@@ -107,7 +109,7 @@ const serviceData = {
                 answer: "We offer an alternative verification process if you've lost access to your previously registered email. Contact our support team for assistance."
             }
         ],
-        price: "Ksh 50",
+        price: "Ksh 30",
         callToAction: "Update KRA Email Now"
     },
     "register-nssf": {
@@ -138,7 +140,7 @@ const serviceData = {
                 answer: "Yes, our platform provides real-time updates on your registration progress and notifications when your membership is confirmed."
             }
         ],
-        price: "Ksh 50",
+        price: "Ksh 30",
         callToAction: "Register for NSSF Now"
     },
     "register-shif": {
@@ -171,7 +173,7 @@ const serviceData = {
                 answer: "SHIF covers a wide range of services including outpatient care, inpatient services, maternity care, and chronic disease management. Specific coverage details are available on the SHIF portal."
             }
         ],
-        price: "Ksh 50",
+        price: "Ksh 30",
         callToAction: "Register for SHIF Now"
     },
     "file-nil-returns": {
@@ -206,13 +208,13 @@ const serviceData = {
                 answer: "Yes, you'll receive an official KRA acknowledgment receipt immediately after successful filing, which you can download and save for your records."
             }
         ],
-        price: "Ksh 50",
+        price: "Ksh 30",
         callToAction: "File Nil Returns Now"
     }
 };
 
-export default function ServicePage({ params }) {
-    const { slug } = params;
+export default async function ServicePage({ params }) {
+    const { slug } = await params;
     const service = serviceData[slug];
 
     if (!service) {
@@ -351,7 +353,7 @@ export default function ServicePage({ params }) {
 
                                 <div className="pt-2">
                                     <Button size="lg" className="w-full rounded-xl text-sm" asChild>
-                                        <Link href={`/checkout/${slug}`}>
+                                        <Link href={slug === 'register-kra-pin' ? '/kra-registration' : `/checkout/${slug}`}>
                                             {service.callToAction} <ArrowRight className="ml-2 h-3 w-3 md:h-4 md:w-4" />
                                         </Link>
                                     </Button>

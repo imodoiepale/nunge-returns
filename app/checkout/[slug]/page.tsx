@@ -16,7 +16,7 @@ const serviceData = {
     "register-kra-pin": {
         title: "Register KRA PIN",
         icon: "file-plus",
-        price: "50"
+        price: "30"
     },
     "renew-kra-password": {
         title: "Renew KRA Password",

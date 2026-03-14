@@ -79,8 +79,11 @@ export default function Home() {
                 Start Filing Now <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" className="rounded-full">
-              Explore Features
+            <Button size="lg" variant="outline" className="rounded-full" asChild>
+              <Link href="/kra-registration">
+                <FilePlusIcon className="mr-2 h-4 w-4" />
+                Register KRA PIN
+              </Link>
             </Button>
           </div>
         </div>
